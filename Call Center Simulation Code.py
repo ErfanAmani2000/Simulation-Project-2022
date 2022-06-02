@@ -1,9 +1,9 @@
 import random
 import math
-import pandas as pd
 
 def starting_state():
 
+    # State variables
     state = dict()
     state['Normal Queue'] = 0
     state['Special Queue'] = 0
@@ -16,14 +16,49 @@ def starting_state():
     state['Normal Technical Queue'] = 0
     state['Shift Status'] = 0
 
+    # Data: will save every essential data
     data = dict()
+    data['Customers'] = dict()
+
+    # Cumulative Stats
+    data['Cumulative Stats'] = dict()
+    data['Cumulative Stats'][] = 0 # this needs to be completed
+
     # Starting FEL
     future_event_list = list()
-    future_event_list.append({'Event Type': 'Arrival', 'Event Time': 0, 'Customer': 'C1'})
-    # fel_maker(future_event_list, 'Arrival', 0)
-
+    future_event_list.append({'Event Type': 'Shift Start/End', 'Event Time': 0})
+    future_event_list.append({'Event Type': 'Disruption Start', 'Event Time': 0})
+    future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0})
     return state, future_event_list, data
 
+def fel_maker(future_event_list, event_type, clock, customer=None):
+    event_time = 0
+    inter_arrival_param = {1:3, 2:1, 3:2}
+    service_time_param = {"Amateur":3, "Expert":7, "Technical":10}
+
+    if event_type == 'Call Start':
+        event_time = clock + exponential(inter_arrival_param[state['Shift Status']])
+
+    elif event_type == 'Call End':
+        event_time = clock + exponential(service_time_param[])
+
+    elif event_type == 'Technical Call End':
+        event_time = clock + exponential(10)
+
+    elif event_type == 'Disruption End':
+        event_time = clock + 1440
+
+    elif event_type == 'Disruption Start':
+        event_time = clock + random.randint(1, 30) # this should be double checked
+
+    elif event_type == 'Month Change':
+        event_time = clock + 30*1440
+
+    elif event_type == 'Shift Start/End':
+        event_time = clock + 480
+
+    new_event = {'Event Type': event_type, 'Event Time': event_time, 'Customer': customer}
+    future_event_list.append(new_event)
 
 def exponential(lambd):
     r = random.random()
@@ -33,7 +68,7 @@ def uniform(a, b):
     r = random.random()
     return a + (b - a) * r
 
-def arrival(future_event_list, state, clock, data, customer):
+def call_start(future_event_list, state, clock, data, customer):
     data['Customers'][customer] = dict()
     data['Customers'][customer]['Arrival Time'] = clock  # track every move of this customer
     if
@@ -51,7 +86,32 @@ def arrival(future_event_list, state, clock, data, customer):
         data['Queue Customers'][customer] = clock  # add this customer to the queue
         data['Last Time Queue Length Changed'] = clock
 
-def end_of_service(future_event_list, state, clock, data, customer):
+def call_end(future_event_list, state, clock, data, customer):
+
+
+
+def technical_call_end(future_event_list, state, clock, data, customer):
+
+
+
+def disruption_start(future_event_list, state, clock, data, customer):
+
+
+
+def disruption_end(future_event_list, state, clock, data, customer):
+
+
+
+def month_change(future_event_list, state, clock, data, customer):
+
+
+
+def queue_quit(future_event_list, state, clock, data, customer):
+
+
+
+def shift_start_end(future_event_list, state, clock, data, customer):
+
 
 
 def simulation(simulation_time):
