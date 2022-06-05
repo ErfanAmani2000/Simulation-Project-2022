@@ -27,6 +27,11 @@ def starting_state():
     data['Last Time Queue Length Changed']['Normal Technical Queue'] = 0
     data['Last Time Queue Length Changed']['Special Technical Queue'] = 0
     #
+    data['Last Time Server Status Changed'] = dict()  # Needed to calculate area under queue length curve
+    data['Last Time Server Status Changed']['Expert'] = 0
+    data['Last Time Server Status Changed']['Amateur'] = 0
+    data['Last Time Server Status Changed']['Technical'] = 0
+    #
     data['Maximum Queue Length'] = dict()
     data['Maximum Queue Length']['Normal Queue'] = 0
     data['Maximum Queue Length']['Special Queue'] = 0
@@ -66,9 +71,9 @@ def starting_state():
     data['Cumulative Stats']['Area Under Waiting time']['Special Technical Queue'] = 0
     #
     data['Cumulative Stats']['Area Under Server Busy time'] = dict()
-    data['Cumulative Stats']['Area Under Server Busy time']['Amateur Servers'] = 0
-    data['Cumulative Stats']['Area Under Server Busy time']['Expert Servers'] = 0
-    data['Cumulative Stats']['Area Under Server Busy time']['Technical Servers'] = 0
+    data['Cumulative Stats']['Area Under Server Busy time']['Amateur'] = 0
+    data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = 0
+    data['Cumulative Stats']['Area Under Server Busy time']['Technical'] = 0
 
     # Starting FEL
     future_event_list = list()
@@ -121,45 +126,67 @@ def call_start(future_event_list, state, clock, data, user):
             if state['Expert Server Status'] < 2:
                 state['Expert Server Status'] += 1
                 fel_maker(future_event_list, 'Call End', clock, state, user)
-                data['Cumulative Stats']['Area Under Server Busy time']['Expert Servers'] = state['Expert Server Status'] * ( - clock) # this needs to be completed
-                fel_maker(future_event_list, 'Call Start', clock, state, user)
+                data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = (state['Expert Server Status'] - 1) \
+                                                                            * (clock - data['Last Time Server Status Changed']['Expert'])
+                data['Last Time Server Status Changed']['Expert'] = clock
+                user[2] = 'Expert'
             else:
                 state['Normal Queue'] += 1
                 if state['Normal Queue'] >= 4:
                     if random.random() <= 0.5:
                         state['Normal Queue'] -= 1
                         state['Normal CallBack Queue'] += 1
-                        fel_maker(future_event_list, 'Call Start', clock, state, user)
+                        data['Cumulative Stats']['Area Under Queue Length Curve']['Normal CallBack Queue'] = (state['Normal CallBack Queue'] - 1) \
+                                                                            * (clock - data['Last Time Queue Length Changed']['Normal CallBack Queue'])
+                        data['Last Time Queue Length Changed']['Normal CallBack Queue'] = clock
                     else:
-
-                else:
-                    fel_maker(future_event_list, 'Call Start', clock, state, user) # this needs to be checked
+                        if random.random() <= 0.15:
+                            fel_maker(future_event_list, 'Queue Quit', clock, state, user)
+                data['Cumulative Stats']['Area Under Queue Length Curve']['Normal Queue'] = (state['Normal Queue'] - 1) \
+                                                                            * (clock - data['Last Time Queue Length Changed']['Normal Queue'])
+                data['Last Time Queue Length Changed']['Normal Queue'] = clock
         else:
             state['Amateur Server Status'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
-            fel_maker(future_event_list, 'Call Start', clock, state, user)
+            data['Cumulative Stats']['Area Under Server Busy time']['Amateur'] = (state['Amateur Server Status'] - 1) \
+                                                                            * (clock - data['Last Time Server Status Changed']['Amateur'])
+            data['Last Time Server Status Changed']['Amateur'] = clock
+            user[2] = 'Expert'
     else:
         if state['Expert Server Status'] < 2:
             state['Expert Server Status'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
-            fel_maker(future_event_list, 'Call Start', clock, state, user)
+            data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = (state['Expert Server Status'] - 1) \
+                                                                            * (clock - data['Last Time Server Status Changed']['Expert'])
+            data['Last Time Server Status Changed']['Expert'] = clock
         else:
             state['Special Queue'] += 1
             if state['Special Queue'] >= 4:
                 if random.random() <= 0.5:
                     state['Special Queue'] -= 1
                     state['Special CallBack Queue'] += 1
-                    fel_maker(future_event_list, 'Call Start', clock, state, user)
+                    data['Cumulative Stats']['Area Under Queue Length Curve']['Special CallBack Queue'] = (state['Special CallBack Queue'] - 1) \
+                                                                            * (clock - data['Last Time Queue Length Changed']['Special CallBack Queue'])
+                    data['Last Time Queue Length Changed']['Special CallBack Queue'] = clock
                 else:
+                    if random.random() <= 0.15:
+                        fel_maker(future_event_list, 'Queue Quit', clock, state, user)
+                data['Cumulative Stats']['Area Under Queue Length Curve']['Special Queue'] = (state['Special Queue'] - 1) \
+                                                                            * (clock - data['Last Time Queue Length Changed']['Special Queue'])
+                data['Last Time Queue Length Changed']['Special Queue'] = clock
 
-            else:
-                fel_maker(future_event_list, 'Call Start', clock, state, user)
+    new_user = [int(user[1:]) + 1, '', '', 0]
+    if random.random() <= 0.3:
+        new_user[1] = 'Special'
+        new_user[2] = 'Expert'
+    else:
+        new_user[1] = 'Normal'
+    fel_maker(future_event_list, 'Call Start', clock, state, new_user)
+
 
 def call_end(future_event_list, state, clock, data, user):
         if user[3] == 0:
 
-        else:
-            future_event_list
 
 
 def technical_call_end(future_event_list, state, clock, data, user):
