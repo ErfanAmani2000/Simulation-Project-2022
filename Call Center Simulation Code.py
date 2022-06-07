@@ -119,6 +119,15 @@ def uniform(a, b):
     r = random.random()
     return a + (b - a) * r
 
+def Data_Server_Calculater(data,state,clock,name):
+    data['Cumulative Stats']['Area Under Server Busy time'][name] = (state['{} Server Status'.format(name)] - 1) \
+                                                                * (clock - data['Last Time Server Status Changed'][name])
+    data['Last Time Server Status Changed'][name] = clock
+def Data_Queue_Calculater(data,state,clock,name):
+    data['Cumulative Stats']['Area Under Queue Length Curve']['{} Queue'.format(name)] = (state['{} Queue'.format(name)] - 1) \
+                                                                * (clock - data['Last Time Queue Length Changed']['{} Queue'.format(name)])
+    data['Last Time Queue Length Changed']['{} Queue'.format(name)] = clock
+
 def call_start(future_event_list, state, clock, data, user):
 
     if user[1] == 'Normal':
@@ -126,9 +135,8 @@ def call_start(future_event_list, state, clock, data, user):
             if state['Expert Server Status'] < 2:
                 state['Expert Server Status'] += 1
                 fel_maker(future_event_list, 'Call End', clock, state, user)
-                data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = (state['Expert Server Status'] - 1) \
-                                                                            * (clock - data['Last Time Server Status Changed']['Expert'])
-                data['Last Time Server Status Changed']['Expert'] = clock
+
+                Data_Server_Calculater(data,state,clock,'Expert')
                 user[2] = 'Expert'
             else:
                 state['Normal Queue'] += 1
@@ -136,44 +144,35 @@ def call_start(future_event_list, state, clock, data, user):
                     if random.random() <= 0.5:
                         state['Normal Queue'] -= 1
                         state['Normal CallBack Queue'] += 1
-                        data['Cumulative Stats']['Area Under Queue Length Curve']['Normal CallBack Queue'] = (state['Normal CallBack Queue'] - 1) \
-                                                                            * (clock - data['Last Time Queue Length Changed']['Normal CallBack Queue'])
-                        data['Last Time Queue Length Changed']['Normal CallBack Queue'] = clock
+
+                        Data_Queue_Calculater(data,state,clock,'Normal CallBack')
+
                     else:
-                        if random.random() <= 0.15:
-                            fel_maker(future_event_list, 'Queue Quit', clock, state, user)
-                data['Cumulative Stats']['Area Under Queue Length Curve']['Normal Queue'] = (state['Normal Queue'] - 1) \
-                                                                            * (clock - data['Last Time Queue Length Changed']['Normal Queue'])
-                data['Last Time Queue Length Changed']['Normal Queue'] = clock
+                    
+                        Data_Queue_Calculater(data,state,clock,'Normal')
         else:
             state['Amateur Server Status'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
-            data['Cumulative Stats']['Area Under Server Busy time']['Amateur'] = (state['Amateur Server Status'] - 1) \
-                                                                            * (clock - data['Last Time Server Status Changed']['Amateur'])
-            data['Last Time Server Status Changed']['Amateur'] = clock
+            Data_Server_Calculater(data,state,clock,'Amateur')
+
             user[2] = 'Expert'
     else:
         if state['Expert Server Status'] < 2:
             state['Expert Server Status'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
-            data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = (state['Expert Server Status'] - 1) \
-                                                                            * (clock - data['Last Time Server Status Changed']['Expert'])
-            data['Last Time Server Status Changed']['Expert'] = clock
+            Data_Server_Calculater(data,state,clock,'Expert')
+
         else:
             state['Special Queue'] += 1
             if state['Special Queue'] >= 4:
                 if random.random() <= 0.5:
                     state['Special Queue'] -= 1
                     state['Special CallBack Queue'] += 1
-                    data['Cumulative Stats']['Area Under Queue Length Curve']['Special CallBack Queue'] = (state['Special CallBack Queue'] - 1) \
-                                                                            * (clock - data['Last Time Queue Length Changed']['Special CallBack Queue'])
-                    data['Last Time Queue Length Changed']['Special CallBack Queue'] = clock
+                    Data_Queue_Calculater(data,state,clock,'Special CallBack')
                 else:
                     if random.random() <= 0.15:
                         fel_maker(future_event_list, 'Queue Quit', clock, state, user)
-                data['Cumulative Stats']['Area Under Queue Length Curve']['Special Queue'] = (state['Special Queue'] - 1) \
-                                                                            * (clock - data['Last Time Queue Length Changed']['Special Queue'])
-                data['Last Time Queue Length Changed']['Special Queue'] = clock
+                Data_Queue_Calculater(data,state,clock,'Special')
 
     new_user = [int(user[1:]) + 1, '', '', 0]
     if random.random() <= 0.3:
@@ -185,7 +184,84 @@ def call_start(future_event_list, state, clock, data, user):
 
 
 def call_end(future_event_list, state, clock, data, user):
-        if user[3] == 0:
+
+    
+    if user[3] ==1:
+        future_event_list.pop(user[0])
+    if random.random() < 0.15:
+        if  state['Technical Server Status'] ==2:
+            if user[1] == 'Normal':
+                state['Normal Technical Queue'] += 1
+
+                Data_Queue_Calculater(data,state,clock,'Normal Technical')
+
+            elif user[1] == 'Special':
+                state['Special Technical Queue'] += 1
+
+                Data_Queue_Calculater(data,state,clock,'Special Technical')
+        elif  state['Technical Server Status'] < 2 :
+            state['Technical Server Status'] += 1
+            fel_maker(future_event_list, 'Technical Call End', clock, state, user)
+
+            Data_Server_Calculater(data,state,clock,'Technical Server')
+    
+    ##########################################
+    if user[2] == 'Expert':
+        if state['Special Queue'] >0:
+            state['Special Queue'] -=1
+            fel_maker(future_event_list, 'Call End', clock, state, user)
+
+            Data_Queue_Calculater(data,state,clock,'Special')
+
+        else:
+            if state['Normal Queue'] == 0:
+                if state['Shift Status'] ==2 or state['Shift Status'] ==3:
+                    if state['Special CallBack Queue'] > 0:
+                        state['Special CallBack Queue'] -=1
+                        fel_maker(future_event_list, 'Call End', clock, state, user)
+
+                        Data_Queue_Calculater(data,state,clock,'Special CallBack')
+                    else:
+                        if state['Normal CallBack Queue'] > 0:
+                            state['Normal CallBack Queue'] -=1
+                            fel_maker(future_event_list, 'Call End', clock, state, user))#############
+
+                            Data_Queue_Calculater(data,state,clock,'normal CallBack')
+
+                        else:
+                            state['Expert Server Status'] -=1
+                            Data_Server_Calculater(data,state,clock,'Expert')
+                else:
+                    state['Expert Server Status'] -=1
+                    Data_Server_Calculater(data,state,clock,'Expert')
+            else:
+                state['Normal Queue'] -=1
+                fel_maker(future_event_list, 'Call End', clock, state, user)#############
+                Data_Queue_Calculater(data,state,clock,'normal')
+        
+    elif user[2] == 'Amateur':
+        if state['Normal Queue'] > 0:
+            state['Normal Queue'] -= 1
+            fel_maker(future_event_list, 'Call End', clock, state, user)
+
+            Data_Queue_Calculater(data,state,clock,'normal')
+        else:
+            if state['Shift Status'] ==2 or state['Shift Status'] ==3:
+                if state['Normal CallBack Queue'] > 0:
+                        state['Normal CallBack Queue'] -=1
+                        fel_maker(future_event_list, 'Call End', clock, state, user))#############
+
+                        Data_Queue_Calculater(data,state,clock,'normal CallBack')
+
+                else:
+                    state['Amateur Server Status'] -=1
+                    Data_Server_Calculater(data,state,clock,'Amateur')
+            else:
+                state['Amateur Server Status'] -=1
+                Data_Server_Calculater(data,state,clock,'Amateur')
+
+
+
 
 
 
