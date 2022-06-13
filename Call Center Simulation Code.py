@@ -1,3 +1,4 @@
+from importlib.metadata import distribution
 import random
 import math
 
@@ -18,6 +19,9 @@ def starting_state():
     # Data: will save every essential data
     data = dict()
     data['Users'] = dict()  # To track each customer, saving their arrival time, time service begins, etc.
+    data['Users']['Entrance Time'] = dict()
+    data['Users']['Service Start Time'] = dict()
+    data['Users']['Service End Time'] = dict()
     #
     data['Last Time Queue Length Changed'] = dict()  # Needed to calculate area under queue length curve
     data['Last Time Queue Length Changed']['Normal Queue'] = 0
@@ -31,6 +35,10 @@ def starting_state():
     data['Last Time Server Status Changed']['Expert'] = 0
     data['Last Time Server Status Changed']['Amateur'] = 0
     data['Last Time Server Status Changed']['Technical'] = 0
+    #
+    data['Last Time Disruption start'] = -1440
+    #
+    data['Number Of No Waiting Special User'] = 0
     #
     data['Maximum Queue Length'] = dict()
     data['Maximum Queue Length']['Normal Queue'] = 0
@@ -82,13 +90,23 @@ def starting_state():
     future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0})
     return state, future_event_list, data
 
-def fel_maker(future_event_list, event_type, clock, state, user=None):
+def fel_maker(future_event_list, event_type, clock, state, user=None,disruption='No'):
     event_time = 0
     inter_arrival_param = {1:3, 2:1, 3:2}
     service_time_param = {"Amateur":7, "Expert":3, "Technical":10}
+    inter_arrival_param_disruption = {1:2, 2:0.5, 3:1}
+
+
 
     if event_type == 'Call Start':
-        event_time = clock + exponential(inter_arrival_param[state['Shift Status']])
+        
+        if disruption == 'No':
+            event_time = clock + exponential(inter_arrival_param[state['Shift Status']])
+        else:
+            
+
+            event_time = clock + exponential(inter_arrival_param_disruption[state['Shift Status']])
+
 
     elif event_type == 'Call End':
         event_time = clock + exponential(service_time_param[])
@@ -120,15 +138,21 @@ def uniform(a, b):
     return a + (b - a) * r
 
 def Data_Server_Calculater(data,state,clock,name):
-    data['Cumulative Stats']['Area Under Server Busy time'][name] = (state['{} Server Status'.format(name)] - 1) \
+    data['Cumulative Stats']['Area Under Server Busy time'][name] += (state['{} Server Status'.format(name)] - 1) \
                                                                 * (clock - data['Last Time Server Status Changed'][name])
     data['Last Time Server Status Changed'][name] = clock
+    
+
 def Data_Queue_Calculater(data,state,clock,name):
-    data['Cumulative Stats']['Area Under Queue Length Curve']['{} Queue'.format(name)] = (state['{} Queue'.format(name)] - 1) \
+    data['Cumulative Stats']['Area Under Queue Length Curve']['{} Queue'.format(name)] += (state['{} Queue'.format(name)] - 1) \
                                                                 * (clock - data['Last Time Queue Length Changed']['{} Queue'.format(name)])
     data['Last Time Queue Length Changed']['{} Queue'.format(name)] = clock
+    data['Maximum Queue Length']['{} Queue'.format(name)] = max(data['Maximum Queue Length']['{} Queue'.format(name)],state['{} Queue'.format(name)]) 
 
 def call_start(future_event_list, state, clock, data, user):
+    data['Users']['Entrance Time'][int(user[1:]) + 1] = clock      #this need a check
+    # data['Users']['Service Start Time'][int(user[1:]) + 1] = 0
+    # data['Users']['Service End Time'][int(user[1:]) + 1] = 0
 
     if user[1] == 'Normal':
         if state['Amateur Server Status'] == 3:
@@ -161,6 +185,7 @@ def call_start(future_event_list, state, clock, data, user):
             state['Expert Server Status'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
             Data_Server_Calculater(data,state,clock,'Expert')
+            data['Number Of No Waiting Special User'] +=1
 
         else:
             state['Special Queue'] += 1
@@ -180,7 +205,10 @@ def call_start(future_event_list, state, clock, data, user):
         new_user[2] = 'Expert'
     else:
         new_user[1] = 'Normal'
-    fel_maker(future_event_list, 'Call Start', clock, state, new_user)
+    if clock >= data['Last Time Disruption start'] + 1440 :
+        fel_maker(future_event_list, 'Call Start', clock, state, new_user,distribution='No')
+    else:
+        fel_maker(future_event_list, 'Call Start', clock, state, new_user,distribution='Yes')
 
 
 def call_end(future_event_list, state, clock, data, user):
@@ -248,10 +276,10 @@ def call_end(future_event_list, state, clock, data, user):
         else:
             if state['Shift Status'] ==2 or state['Shift Status'] ==3:
                 if state['Normal CallBack Queue'] > 0:
-                        state['Normal CallBack Queue'] -=1
-                        fel_maker(future_event_list, 'Call End', clock, state, user))#############
+                    state['Normal CallBack Queue'] -=1
+                    fel_maker(future_event_list, 'Call End', clock, state, user))#############
 
-                        Data_Queue_Calculater(data,state,clock,'normal CallBack')
+                    Data_Queue_Calculater(data,state,clock,'normal CallBack')
 
                 else:
                     state['Amateur Server Status'] -=1
@@ -278,11 +306,12 @@ def technical_call_end(future_event_list, state, clock, data, user):
 
 
 def disruption_start(future_event_list, state, clock, data, user):
-
+    fel_maker(future_event_list, 'Disruption Start', clock, state, user,distribution='Yes')
+    data['Last Time Disruption start'] = clock
 
 
 def disruption_end(future_event_list, state, clock, data, user):
-
+    fel_maker(future_event_list, 'Disruption End', clock, state, user,distribution='No')
 
 
 def month_change(future_event_list, state, clock, data, user):
