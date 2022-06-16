@@ -15,7 +15,7 @@ def starting_state():
     state['Normal Technical Queue'] = 0
     state['Shift Status'] = 0
 
-    # Data: will save every essential data
+    #=================== Data: will save every essential data
     data = dict()
     data['Users'] = dict()
     """ 
@@ -38,6 +38,8 @@ def starting_state():
     data['Last Time Disruption start'] = -1440
     #
     data['Number Of No Waiting Special User'] = 0
+    #
+    data['Users To waiting In Tecnical Queue'] = []
     #
     data['Maximum Queue Length'] = dict()
     data['Maximum Queue Length']['Normal Queue'] = 0
@@ -92,7 +94,7 @@ def starting_state():
 def fel_maker(future_event_list, event_type, clock, state, user=None, disruption='No'):
     event_time = 0
     inter_arrival_param = {1:3, 2:1, 3:2}
-    service_time_param = {"Amateur":7, "Expert":3, "Technical":10}
+    service_time_param = {"Amateur":7, "Expert":3}
     disruption_inter_arrival_param = {1:2, 2:0.5, 3:1}
 
     if event_type == 'Call Start':
@@ -102,14 +104,15 @@ def fel_maker(future_event_list, event_type, clock, state, user=None, disruption
             event_time = clock + exponential(disruption_inter_arrival_param[state['Shift Status']])
 
     elif event_type == 'Call End':
-        event_time = clock + exponential(service_time_param[])
+        
+        event_time = clock + exponential(service_time_param[user[2]])####################
 
     elif event_type == 'Technical Call End':
         event_time = clock + exponential(10)
 
     elif event_type == 'Disruption Start':
         event_time = clock + 1440*random.randint(1, 30) # this needs to be checked
-        clock =
+        
 
     elif event_type == 'Month Change':
         event_time = clock + 30*1440
@@ -140,16 +143,18 @@ def data_queue_calculater(data, state, clock, name):
     data['Maximum Queue Length']['{} Queue'.format(name)] = max(data['Maximum Queue Length']['{} Queue'.format(name)],state['{} Queue'.format(name)])
 
 def call_start(future_event_list, state, clock, data, user):
-    data['Users'][int(user[1:])] = [clock, 0, 0, None, None]
+    data['Users'][int(user[1:])] = [clock, 0, 0, None, None]#########
 
     if user[1] == 'Normal':
         if state['Amateur Server Status'] == 3:
             if state['Expert Server Status'] < 2:
                 state['Expert Server Status'] += 1
+                user[2] = 'Expert'
                 fel_maker(future_event_list, 'Call End', clock, state, user)
                 data_server_calculater(data, state, clock, 'Expert')
-                data['Users'][int(user[1:])][] = clock
-                user[2] = 'Expert'
+                data['Users'][int(user[1:])][1] = clock
+                data['Users'][int(user[1:])][2] = clock
+                
             else:
                 state['Normal Queue'] += 1
                 if state['Normal Queue'] >= 4:
@@ -157,20 +162,25 @@ def call_start(future_event_list, state, clock, data, user):
                         state['Normal Queue'] -= 1
                         state['Normal CallBack Queue'] += 1
                         data_queue_calculater(data, state, clock, 'Normal CallBack')
+                        data['Users'][int(user[1:])][1] = clock
                     else:
                         data_queue_calculater(data, state, clock, 'Normal')
         else:
             state['Amateur Server Status'] += 1
+            user[2] = 'Amateur'
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_server_calculater(data, state, clock, 'Amateur')
-            data['Users'][int(user[1:])] = data['Users'][int(user[1:])].append(clock)
-            user[2] = 'Expert'
+            data['Users'][int(user[1:])][1] = clock
+            data['Users'][int(user[1:])][2] = clock
+            
     else:
         if state['Expert Server Status'] < 2:
             state['Expert Server Status'] += 1
+            user[2] = 'Expert'
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_server_calculater(data, state, clock, 'Expert')
-            data['Users'][int(user[1:])] = data['Users'][int(user[1:])].append(clock)
+            data['Users'][int(user[1:])][1] = clock
+            data['Users'][int(user[1:])][2] = clock
             data['Number Of No Waiting Special User'] += 1
         else:
             state['Special Queue'] += 1
@@ -183,7 +193,7 @@ def call_start(future_event_list, state, clock, data, user):
                     if random.random() <= 0.15:
                         fel_maker(future_event_list, 'Queue Quit', clock, state, user)
                 data_queue_calculater(data, state, clock, 'Special')
-    new_user = [int(user[1:]) + 1, '', '', 0]
+    new_user = [int(user[1:]) + 1, '', '', 0]#########################
     if random.random() <= 0.3:
         new_user[1] = 'Special'
         new_user[2] = 'Expert'
@@ -195,28 +205,37 @@ def call_start(future_event_list, state, clock, data, user):
         fel_maker(future_event_list, 'Call Start', clock, state, new_user, disruption='Yes')
 
 def call_end(future_event_list, state, clock, data, user):
+    data['Users'][user[0]][2] = clock
     if user[3] ==1:
-        future_event_list.pop(user[0])
+        for founder in future_event_list:
+            if founder["User"] == user[0]:
+                break
+        future_event_list.remove(founder)
     if random.random() < 0.15:
         if  state['Technical Server Status'] ==2:
             if user[1] == 'Normal':
                 state['Normal Technical Queue'] += 1
 
                 data_queue_calculater(data, state, clock, 'Normal Technical')
+                data['Users To waiting In Tecnical Queue'].append(user[0])
 
             elif user[1] == 'Special':
                 state['Special Technical Queue'] += 1
 
                 data_queue_calculater(data, state, clock, 'Special Technical')
+                data['Users To waiting In Tecnical Queue'].append(user[0])
         elif state['Technical Server Status'] < 2 :
             state['Technical Server Status'] += 1
             fel_maker(future_event_list, 'Technical Call End', clock, state, user)
             data_server_calculater(data, state, clock, 'Technical Server')
+            data['Users'][user[0]][3] = clock
     if user[2] == 'Expert':
         if state['Special Queue'] >0:
             state['Special Queue'] -=1
+            user[2] = 'Expert'
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_queue_calculater(data, state, clock, 'Special')
+            data['Users'][int(user[1:])][1] = clock
         else:
             if state['Normal Queue'] == 0:
                 if (state['Shift Status'] ==2) or (state['Shift Status'] ==3):
@@ -224,11 +243,13 @@ def call_end(future_event_list, state, clock, data, user):
                         state['Special CallBack Queue'] -=1
                         fel_maker(future_event_list, 'Call End', clock, state, user)
                         data_queue_calculater(data, state, clock, 'Special CallBack')
+                        data['Users'][int(user[1:])][1] = clock
                     else:
                         if state['Normal CallBack Queue'] > 0:
                             state['Normal CallBack Queue'] -=1
                             fel_maker(future_event_list, 'Call End', clock, state, user)
                             data_queue_calculater(data, state, clock, 'normal CallBack')
+                            data['Users'][int(user[1:])][1] = clock
                         else:
                             state['Expert Server Status'] -=1
                             data_server_calculater(data, state, clock, 'Expert')
@@ -239,17 +260,21 @@ def call_end(future_event_list, state, clock, data, user):
                 state['Normal Queue'] -=1
                 fel_maker(future_event_list, 'Call End', clock, state, user)
                 data_queue_calculater(data, state, clock, 'normal')
+                data['Users'][int(user[1:])][1] = clock
+                
     elif user[2] == 'Amateur':
         if state['Normal Queue'] > 0:
             state['Normal Queue'] -= 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_queue_calculater(data, state, clock, 'normal')
+            data['Users'][int(user[1:])][1] = clock
         else:
             if state['Shift Status'] ==2 or state['Shift Status'] ==3:
                 if state['Normal CallBack Queue'] > 0:
                     state['Normal CallBack Queue'] -=1
                     fel_maker(future_event_list, 'Call End', clock, state, user)
                     data_queue_calculater(data, state, clock, 'normal CallBack')
+                    data['Users'][int(user[1:])][1] = clock
                 else:
                     state['Amateur Server Status'] -=1
                     data_server_calculater(data, state, clock, 'Amateur')
@@ -258,15 +283,21 @@ def call_end(future_event_list, state, clock, data, user):
                 data_server_calculater(data, state, clock, 'Amateur')
 
 def technical_call_end(future_event_list, state, clock, data, user):
+    data['Users'][user[0]][4] = clock
     if state['Special Technical Queue'] == 0:
         if state['Normal Technical Queue'] == 0:
             state['Technical Server Status'] += 1
+            
         else:
             state['Normal Technical Queue'] -= 1
             fel_maker(future_event_list, 'Technical Call End', clock, state, user)
+            temp = data['Users To waiting In Tecnical Queue'].pop(0)
+            data['Users'][temp][3] = clock
     else:
         state['Special Technical Queue'] -= 1
         fel_maker(future_event_list, 'Technical Call End', clock, state, user)
+        temp = data['Users To waiting In Tecnical Queue'].pop(0)
+        data['Users'][temp][3] = clock
 
 def disruption_start(clock, data):
     data['Last Time Disruption start'] = clock
@@ -296,3 +327,11 @@ def simulation(simulation_time):
     while clock < simulation_time
 
 simulation(1000)
+
+#====================================Calculate of the KPI
+
+
+
+
+
+
