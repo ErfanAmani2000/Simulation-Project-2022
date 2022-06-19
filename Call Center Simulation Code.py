@@ -1,5 +1,6 @@
 import random
 import math
+total_time=43200
 
 
 def starting_state():
@@ -31,10 +32,23 @@ def starting_state():
     data['Last Time Queue Length Changed']['Normal Technical Queue'] = 0
     data['Last Time Queue Length Changed']['Special Technical Queue'] = 0
     #
+    data['Last Queue Length'] = dict()  # Needed to calculate area under queue length curve
+    data['Last Queue Length']['Normal Queue'] = 0
+    data['Last Queue Length']['Special Queue'] = 0
+    data['Last Queue Length']['Normal CallBack Queue'] = 0
+    data['Last Queue Length']['Special CallBack Queue'] = 0
+    data['Last Queue Length']['Normal Technical Queue'] = 0
+    data['Last Queue Length']['Special Technical Queue'] = 0
+    #
     data['Last Time Server Status Changed'] = dict()  # Needed to calculate area under queue length curve
     data['Last Time Server Status Changed']['Expert'] = 0
     data['Last Time Server Status Changed']['Amateur'] = 0
     data['Last Time Server Status Changed']['Technical'] = 0
+    #
+    data['Last Server Status'] = dict()  # Needed to calculate area under queue length curve
+    data['Last Server Status']['Expert'] = 0
+    data['Last Server Status']['Amateur'] = 0
+    data['Last Server Status']['Technical'] = 0
     #
     data['Last Time Disruption start'] = -1440
     #
@@ -144,13 +158,13 @@ def discrete_uniform(a, b):
 
 
 def data_server_calculater(data, state, clock, name):
-    data['Cumulative Stats']['Area Under Server Busy time'][name] += (state['{} Server Status'.format(name)] - 1) \
+    data['Cumulative Stats']['Area Under Server Busy time'][name] += (state['{} Server Status'.format(name)] - data['Last Server Status']['{}'.format(name)]) \
                                                                     * (clock - data['Last Time Server Status Changed'][name])
     data['Last Time Server Status Changed'][name] = clock
 
 
 def data_queue_calculater(data, state, clock, name):
-    data['Cumulative Stats']['Area Under Queue Length Curve']['{} Queue'.format(name)] += (state['{} Queue'.format(name)] - 1) \
+    data['Cumulative Stats']['Area Under Queue Length Curve']['{} Queue'.format(name)] += (state['{} Queue'.format(name)] - data['Last Queue Length']['{} Queue'.format(name)]) \
                                                                     * (clock - data['Last Time Queue Length Changed']['{} Queue'.format(name)])
     data['Last Time Queue Length Changed']['{} Queue'.format(name)] = clock
     data['Maximum Queue Length']['{} Queue'.format(name)] = max(data['Maximum Queue Length']['{} Queue'.format(name)], state['{} Queue'.format(name)])
@@ -162,6 +176,7 @@ def call_start(future_event_list, state, clock, data, user):
     if user[1] == 'Normal':
         if state['Amateur Server Status'] == 3:
             if state['Expert Server Status'] < 2:
+                data['Last Server Status']['Expert'] = state['Expert Server Status']
                 state['Expert Server Status'] += 1
                 user[2] = 'Expert'
                 fel_maker(future_event_list, 'Call End', clock, state, user)
@@ -169,16 +184,21 @@ def call_start(future_event_list, state, clock, data, user):
                 data['Users'][user[0]][1] = clock
 
             else:
+                data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
                 state['Normal Queue'] += 1
+                
                 if state['Normal Queue'] >= 4:
                     if random.random() <= 0.5:
+                        data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
                         state['Normal Queue'] -= 1
+                        data['Last Queue Length']['Normal Queue'] = state['Normal CallBack Queue']
                         state['Normal CallBack Queue'] += 1
                         data_queue_calculater(data, state, clock, 'Normal CallBack')
                         data['Users'][user[0]][1] = clock
                     else:
                         data_queue_calculater(data, state, clock, 'Normal')
         else:
+            data['Last Server Status']['Amateur'] = state['Amateur Server Status']
             state['Amateur Server Status'] += 1
             user[2] = 'Amateur'
             fel_maker(future_event_list, 'Call End', clock, state, user)
@@ -187,6 +207,7 @@ def call_start(future_event_list, state, clock, data, user):
 
     else:
         if state['Expert Server Status'] < 2:
+            data['Last Server Status']['Expert'] = state['Expert Server Status']
             state['Expert Server Status'] += 1
             user[2] = 'Expert'
             fel_maker(future_event_list, 'Call End', clock, state, user)
@@ -195,10 +216,13 @@ def call_start(future_event_list, state, clock, data, user):
 
             data['Number Of No Waiting Special User'] += 1
         else:
+            data['Last Queue Length']['Special Queue'] = state['Special Queue']
             state['Special Queue'] += 1
             if state['Special Queue'] >= 4:
                 if random.random() <= 0.5:
+                    data['Last Queue Length']['Special Queue'] = state['Special Queue']
                     state['Special Queue'] -= 1
+                    data['Last Queue Length']['Special CallBack Queue'] = state['Special CallBack Queue']
                     state['Special CallBack Queue'] += 1
                     data_queue_calculater(data, state, clock, 'Special CallBack')
                 else:
@@ -227,23 +251,27 @@ def call_end(future_event_list, state, clock, data, user):
     if random.random() < 0.15:
         if state['Technical Server Status'] == 2:
             if user[1] == 'Normal':
+                data['Last Queue Length']['Normal Technical Queue'] = state['Normal Technical Queue']
                 state['Normal Technical Queue'] += 1
 
                 data_queue_calculater(data, state, clock, 'Normal Technical')
                 data['Users To waiting In Technical Queue'].append(user[0])
 
             elif user[1] == 'Special':
+                data['Last Queue Length']['Special Technical Queue'] = state['Special Technical Queue']
                 state['Special Technical Queue'] += 1
 
                 data_queue_calculater(data, state, clock, 'Special Technical')
                 data['Users To waiting In Technical Queue'].append(user[0])
         elif state['Technical Server Status'] < 2:
+            data['Last Server Status']['Technical'] = state['Technical Server Status']
             state['Technical Server Status'] += 1
             fel_maker(future_event_list, 'Technical Call End', clock, state, user[0])
             data_server_calculater(data, state, clock, 'Technical')
             data['Users'][user[0]][3] = clock
     if user[2] == 'Expert':
         if state['Special Queue'] > 0:
+            data['Last Queue Length']['Special Queue'] = state['Special Queue']
             state['Special Queue'] -= 1
             user[2] = 'Expert'
             fel_maker(future_event_list, 'Call End', clock, state, user)
@@ -253,23 +281,28 @@ def call_end(future_event_list, state, clock, data, user):
             if state['Normal Queue'] == 0:
                 if (state['Shift Status'] == 2) or (state['Shift Status'] == 3):
                     if state['Special CallBack Queue'] > 0:
+                        data['Last Queue Length']['Special CallBack Queue'] = state['Special CallBack Queue']
                         state['Special CallBack Queue'] -= 1
                         fel_maker(future_event_list, 'Call End', clock, state, user)
                         data_queue_calculater(data, state, clock, 'Special CallBack')
                         data['Users'][user[0]][1] = clock
                     else:
                         if state['Normal CallBack Queue'] > 0:
+                            data['Last Queue Length']['Normal CallBack Queue'] = state['Normal CallBack Queue']
                             state['Normal CallBack Queue'] -= 1
                             fel_maker(future_event_list, 'Call End', clock, state, user)
                             data_queue_calculater(data, state, clock, 'Normal CallBack')
                             data['Users'][user[0]][1] = clock
                         else:
+                            data['Last Server Status']['Expert'] = state['Expert Server Status']
                             state['Expert Server Status'] -= 1
                             data_server_calculater(data, state, clock, 'Expert')
                 else:
+                    data['Last Server Status']['Expert'] = state['Expert Server Status']
                     state['Expert Server Status'] -= 1
                     data_server_calculater(data, state, clock, 'Expert')
             else:
+                data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
                 state['Normal Queue'] -= 1
                 fel_maker(future_event_list, 'Call End', clock, state, user)
                 data_queue_calculater(data, state, clock, 'Normal')
@@ -277,6 +310,7 @@ def call_end(future_event_list, state, clock, data, user):
 
     elif user[2] == 'Amateur':
         if state['Normal Queue'] > 0:
+            data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
             state['Normal Queue'] -= 1
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_queue_calculater(data, state, clock, 'Normal')
@@ -289,9 +323,11 @@ def call_end(future_event_list, state, clock, data, user):
                     data_queue_calculater(data, state, clock, 'Normal CallBack')
                     data['Users'][user[0]][1] = clock
                 else:
+                    data['Last Server Status']['Amateur'] = state['Amateur Server Status']
                     state['Amateur Server Status'] -= 1
                     data_server_calculater(data, state, clock, 'Amateur')
             else:
+                data['Last Server Status']['Amateur'] = state['Amateur Server Status']
                 state['Amateur Server Status'] -= 1
                 data_server_calculater(data, state, clock, 'Amateur')
 
@@ -300,15 +336,18 @@ def technical_call_end(future_event_list, state, clock, data, user):
     data['Users'][user][4] = clock
     if state['Special Technical Queue'] == 0:
         if state['Normal Technical Queue'] == 0:
+            data['Last Server Status']['Technical'] = state['Technical Server Status']
             state['Technical Server Status'] += 1
 
         else:
+            data['Last Queue Length']['Normal Technical Queue'] = state['Normal Technical Queue']
             state['Normal Technical Queue'] -= 1
 
             temp = data['Users To waiting In Technical Queue'].pop(0)
             data['Users'][temp][3] = clock
             fel_maker(future_event_list, 'Technical Call End', clock, state, temp)
     else:
+        data['Last Queue Length']['Special Technical Queue'] = state['Special Technical Queue']
         state['Special Technical Queue'] -= 1
 
         temp = data['Users To waiting In Technical Queue'].pop(0)
@@ -316,8 +355,8 @@ def technical_call_end(future_event_list, state, clock, data, user):
         fel_maker(future_event_list, 'Technical Call End', clock, state, temp)
 
 
-def disruption_start(clock, data):
-    data['Last Time Disruption start'] = clock
+def disruption_start(clock, data):##############
+    data['Last Time Disruption start'] = clock#########
 
 
 def month_change(future_event_list, state, clock):
@@ -325,10 +364,12 @@ def month_change(future_event_list, state, clock):
     fel_maker(future_event_list, 'Month Change', clock, state)
 
 
-def queue_quit(state, user):
+def queue_quit(state, user, data):
     if user[1] == 'Normal':
+        data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
         state['Normal Queue'] -= 1
     else:
+        data['Last Queue Length']['Special Queue'] = state['Special Queue']
         state['Special Queue'] -= 1
 
 
@@ -352,8 +393,8 @@ def simulation(simulation_time):
         clock = current_event['Event Time']  # advance time
         user = current_event['User']  # find the customer of that event
 
-        print(sorted_fel)
-        print('')
+        # print(sorted_fel)
+        # print('')
 
         if clock < simulation_time:
             if current_event['Event Type'] == 'Call Start':
@@ -367,15 +408,43 @@ def simulation(simulation_time):
             elif current_event['Event Type'] == 'Month Change':
                 month_change(future_event_list, state, clock)
             elif current_event['Event Type'] == 'Queue Quit':
-                queue_quit(state, user)
+                queue_quit(state, user, data)
             elif current_event['Event Type'] == 'Shift Start/End':
                 shift_start_end(future_event_list, state, clock)
 
             future_event_list.remove(current_event)
         else:
             future_event_list.clear()
-
-simulation(10000)
+    return data,state
+data ,state= simulation(total_time)
 
 # ====================================Calculate of the KPI
+def Calculate_KPI(data):
+    result = {}
+    result['Average_Queue'] = {}
+    for i in data['Cumulative Stats']['Area Under Queue Length Curve'].keys():
+        result['Average_Queue'][i]=data['Cumulative Stats']['Area Under Queue Length Curve'][i]/total_time
+    
+    result['Max_Queue'] = {}
+    for i in data['Maximum Queue Length'].keys():
+        result['Max_Queue'][i]=data['Maximum Queue Length'][i]
 
+    result['Average_Queue_time'] = {}
+    for i in data['Cumulative Stats']['Area Under Waiting time'].keys():
+        result['Average_Queue_time'][i]=data['Cumulative Stats']['Area Under Waiting time'][i]/total_time
+    
+    result['Max_Queue_time'] = {}
+    for i in data['Maximum Waiting time'].keys():
+        result['Max_Queue_time'][i]=data['Maximum Waiting time'][i]    
+    
+    result['Server_Utilization'] = {}
+    for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
+        result['Server_Utilization'][i]=data['Cumulative Stats']['Area Under Server Busy time'][i]/total_time
+    
+    result['Server_Utilization'] = {}
+    for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
+        result['Server_Utilization'][i]=data['Cumulative Stats']['Area Under Server Busy time'][i]/total_time
+    
+    
+    return result
+result = Calculate_KPI(data)
