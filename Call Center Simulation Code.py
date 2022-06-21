@@ -510,5 +510,5 @@ kpi_result = calculate_kpi(data, 43200)
 print(kpi_result)
 a = data['Users'][25000][0]
 b = data['Users'][25000][2]
-print(a, b)
-#print(data["Users"])
+print(b - a)
+print(data["Users"])
