@@ -153,6 +153,12 @@ def fel_maker(future_event_list: list, event_type: str, clock: float, state: dic
     elif event_type == 'Month Change':
         event_time = clock + 30 * 1440
 
+    elif event_type == 'Queue Quit':
+        if user[1] == 'Normal':
+            event_time = clock + uniform(5, max(25, state['Normal Queue']))
+        else:
+            event_time = clock + uniform(5, max(25, state['Special Queue']))
+
     elif event_type == 'Shift Start/End':
         event_time = clock + 480
 
@@ -235,7 +241,7 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
             else:  # if all expert servers are also busy at the time ...
                 data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
                 state['Normal Queue'] += 1
-
+#                data['Users'][user[0]][1] = None
                 if state['Normal Queue'] >= 4:  # if normal queue length is more than 4 ...
                     if random.random() <= 0.5:  # in order to make half of users
                         data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
@@ -243,9 +249,9 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
                         data['Last Queue Length']['Normal Queue'] = state['Normal CallBack Queue']
                         state['Normal CallBack Queue'] += 1
                         data_queue_calculater(data, state, clock, 'Normal CallBack')
-                        data['Users'][user[0]][1] = clock
                     else:
                         data_queue_calculater(data, state, clock, 'Normal')
+
         else:
             data['Last Server Status']['Amateur'] = state['Amateur Server Status']
             state['Amateur Server Status'] += 1
@@ -263,11 +269,11 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
             fel_maker(future_event_list, 'Call End', clock, state, user)
             data_server_calculater(data, state, clock, 'Expert')
             data['Users'][user[0]][1] = clock
-
             data['Number Of No Waiting Special User'] += 1
         else:
             data['Last Queue Length']['Special Queue'] = state['Special Queue']
             state['Special Queue'] += 1
+#            data['Users'][user[0]][1] = None
             if state['Special Queue'] >= 4:
                 if random.random() <= 0.5:
                     data['Last Queue Length']['Special Queue'] = state['Special Queue']
@@ -419,6 +425,7 @@ def queue_quit(state, user, data):
         data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
         state['Normal Queue'] -= 1
     else:
+        data['Number of special users'] -= 1
         data['Last Queue Length']['Special Queue'] = state['Special Queue']
         state['Special Queue'] -= 1
 
@@ -508,7 +515,5 @@ def calculate_kpi(data, simulation_time):
 kpi_result = calculate_kpi(data, 43200)
 
 print(kpi_result)
-a = data['Users'][25000][0]
-b = data['Users'][25000][2]
-print(b - a)
+
 print(data["Users"])
