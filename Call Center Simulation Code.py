@@ -663,3 +663,4 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
 kpi_result = calculate_kpi(data, 43200)
 
 print(kpi_result)
+print('')
