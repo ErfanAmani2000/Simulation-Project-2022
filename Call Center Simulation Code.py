@@ -500,12 +500,12 @@ def shift_start_end(future_event_list: list, state: dict, clock: float):
     """
     This function is supposed to implement shift change.
     """
-    if clock % 1440 < 480:
+    if clock % 1440 < 480:  # if mod(clock, 1440) < 480, this means we are still in first shift
         state['Shift Status'] = 1
-    elif (clock % 1440 >= 480) and (clock % 1440 < 960):
+    elif (clock % 1440 >= 480) and (clock % 1440 < 960):  # if 480 < mod(clock, 1440) < 960, this means we are in second shift
         state['Shift Status'] = 2
     else:
-        state['Shift Status'] = 3
+        state['Shift Status'] = 3  # if none of the above, so we are in third shift
     fel_maker(future_event_list, 'Shift Start/End', clock, state)
 
 
