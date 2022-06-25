@@ -273,8 +273,10 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
                         data['Queue Users']['Normal CallBack Queue'][user[0]] = clock
                         data_queue_calculater(data, state, clock, 'Normal CallBack')
                     else:  # users that did not use call-back option
-                        if random.random() <= 0.15:  # according to historical data, 15% of them will choose to quit after some time
+                        if random.random() <= 0.15 :  # according to historical data, 15% of them will choose to quit after some time
+                            user[3] = 1
                             fel_maker(future_event_list, 'Queue Quit', clock, state, user)
+                            
                     data_queue_calculater(data, state, clock, 'Normal')
 
         else:  # if at least one amateur server is free ...
@@ -312,7 +314,9 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
                     data_queue_calculater(data, state, clock, 'Special CallBack')
                 else:  # users that did not use call-back option
                     if random.random() <= 0.15:  # according to historical data, 15% of them will choose to quit after some time
+                        user[3] = 1
                         fel_maker(future_event_list, 'Queue Quit', clock, state, user)
+                        
                 data_queue_calculater(data, state, clock, 'Special')
     new_user = [user[0] + 1, '', '', 0]
     if random.random() <= 0.3:  # according to data, 30% of users that call this call center are special
@@ -335,7 +339,7 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
         for index in future_event_list:
             if index["User"][0] == user[0]:
                 break
-            future_event_list.remove(index)
+        future_event_list.remove(index)
     if random.random() < 0.15:  # according to historical data, 15% of users need technical advice
         if state['Technical Server Status'] == 2:  # if all technical users are busy at the time ...
             if user[1] == 'Normal':  # if a normal user wants to use technical advice ...
