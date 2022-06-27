@@ -1,6 +1,8 @@
+from scipy import stats
 import random
 import math
 import pandas as pd
+import numpy as np
 
 
 def starting_state():
@@ -230,7 +232,7 @@ def data_queue_calculater(data: dict, state: dict, clock: float, name: str):
                                                                 state['{} Queue'.format(name)])
 
 
-def data_queue_user(data: dict, clock: float, name: str, user=None, technically='No'):
+def data_queue_user(data: dict, clock: float, name: str, user=None, technically='No', has_CallBack = 'No'):
     parameter = {"No": 1, "Yes": 3}  # to store clock in right position
     if clock != 'Exit':
 
@@ -239,6 +241,8 @@ def data_queue_user(data: dict, clock: float, name: str, user=None, technically=
         potential = data['Queue Users']['{} Queue'.format(name)][first_customer_in_queue][1]
         data['Users'][first_customer_in_queue][parameter[technically]] = clock
         data['Queue Users']['{} Queue'.format(name)].pop(first_customer_in_queue, None)
+        if has_CallBack == 'Yes':
+            data['Users'][first_customer_in_queue][6] = "it_is_CallBack"
         return first_customer_in_queue, potential
     else:
         data['Users'][user[0]][1] = clock
@@ -250,7 +254,7 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
     """
     This function is supposed to implement call start event that is fully described in project's report.
     """
-    data['Users'][user[0]] = [clock, -1, -1, None, None, user[1]]  # -1 means that the user did not receive service
+    data['Users'][user[0]] = [clock, -1, -1, None, None, user[1], None]  # -1 means that the user did not receive service
 
     if user[1] == 'Normal':  # if a normal user call ...
         if state['Amateur Server Status'] == 3:  # if all amateur server are busy ...
@@ -377,18 +381,17 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
                     if state['Special CallBack Queue'] > 0:  # if special user's call-back queue is not empty ...
                         data['Last Queue Length']['Special CallBack Queue'] = state['Special CallBack Queue']
                         state['Special CallBack Queue'] -= 1
-                        first_customer_in_queue, potential = data_queue_user(data, clock, 'Special CallBack')
+                        first_customer_in_queue, potential = data_queue_user(data, clock, 'Special CallBack', has_CallBack= "Yes")
 
                         data_queue_calculater(data, state, clock, 'Special CallBack')
 
-                        fel_maker(future_event_list, 'Call End', clock, state,
-                                  [first_customer_in_queue, "", 'Expert', potential])
+                        fel_maker(future_event_list, 'Call End', clock, state, [first_customer_in_queue, "", 'Expert', potential])
                     else:  # if special user's call-back queue is empty ...
                         if state['Normal CallBack Queue'] > 0:  # whether normal user's call-back queue is not empty ...
                             data['Last Queue Length']['Normal CallBack Queue'] = state['Normal CallBack Queue']
                             state['Normal CallBack Queue'] -= 1
 
-                            first_customer_in_queue, potential = data_queue_user(data, clock, 'Normal CallBack')
+                            first_customer_in_queue, potential = data_queue_user(data, clock, 'Normal CallBack', has_CallBack= "Yes")
                             data_queue_calculater(data, state, clock, 'Normal CallBack')
 
                             fel_maker(future_event_list, 'Call End', clock, state,
@@ -411,7 +414,6 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
                 fel_maker(future_event_list, 'Call End', clock, state,
                           [first_customer_in_queue, '', 'Expert', potential])
 
-
     elif user[2] == 'Amateur':  # if the server that want to end his/her last call is amateur ...
         if state['Normal Queue'] > 0:  # if normal user's queue is not empty ...
             data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
@@ -423,7 +425,7 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
             if state['Shift Status'] == 2 or state['Shift Status'] == 3:  # if we are in 2nd or 3rd shift of a day
                 if state['Normal CallBack Queue'] > 0:  # if special user's call-back queue is not empty at the moment ...
                     state['Normal CallBack Queue'] -= 1
-                    first_customer_in_queue, potential = data_queue_user(data, clock, 'Normal CallBack')
+                    first_customer_in_queue, potential = data_queue_user(data, clock, 'Normal CallBack', has_CallBack= "Yes")
                     data_queue_calculater(data, state, clock, 'Normal CallBack')
                     data['Users'][first_customer_in_queue][1] = clock
                     fel_maker(future_event_list, 'Call End', clock, state,
@@ -521,7 +523,7 @@ def trace_maker(state: dict, clock: float, sorted_fel: list, trace_list: list, c
     trace_list.append(trace_data)
 
 
-def simulation(simulation_time: float) -> dict:
+def simulation(simulation_time: float, trace_creator = False) -> dict:
     """
     This function is meant to do the simulation by help of introduced events.
     param simulation_time: this project is terminating simulation, so this parameter is simulation end time.
@@ -536,7 +538,9 @@ def simulation(simulation_time: float) -> dict:
         current_event = sorted_fel[0]  # find imminent event
         clock = current_event['Event Time']  # advance time to current event time
         user = current_event['User']  # find the user of that event
-        trace_maker(state, clock, sorted_fel, trace_list, current_event)
+
+        if trace_creator:
+            trace_maker(state, clock, sorted_fel, trace_list, current_event)
 
         if clock < simulation_time:  # the if block below is ganna call proper event function for that event type
             if current_event['Event Type'] == 'Call Start':
@@ -572,46 +576,99 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     """
     kpi_results = dict()
     #
-    data['Number of special users( with out technical)'] = 0
-    data['Number of Normal users( with out technical)'] = 0
-    data['Number of special users( technical)'] = 0
-    data['Number of Normal users( technical)'] = 0
+    kpi_results['Numbers'] = {}
+    kpi_results['Numbers']['Special Queue'] = 0
+    kpi_results['Numbers']['Normal Queue'] = 0
+    kpi_results['Numbers']['Special Technical Queue'] = 0
+    kpi_results['Numbers']['Normal Technical Queue'] = 0
+    kpi_results['Numbers']['Special CallBack Queue'] = 0
+    kpi_results['Numbers']['Normal CallBack Queue'] = 0
     #
-    kpi_results['Special Users time in queue( with out technical)'] = 0
-    kpi_results['Normal Users time in queue( with out technical)'] = 0
-    kpi_results['Special Users time in queue( technical)'] = 0
-    kpi_results['Normal Users time in queue( technical)'] = 0
+    kpi_results['Max Queue Time'] = {}
+    kpi_results['Max Queue Time']['Special Technical Queue'] = 0
+    kpi_results['Max Queue Time']['Special Queue'] = 0
+    kpi_results['Max Queue Time']['Normal Technical Queue'] = 0
+    kpi_results['Max Queue Time']['Normal Queue'] = 0
+    kpi_results['Max Queue Time']['Special CallBack Queue'] = 0
+    kpi_results['Max Queue Time']['Normal CallBack Queue'] = 0
+    #
+    kpi_results['Average Queue Time'] = {}
+    kpi_results['Average Queue Time']['Special Queue'] = 0
+    kpi_results['Average Queue Time']['Normal Queue'] = 0
+    kpi_results['Average Queue Time']['Special Technical Queue'] = 0
+    kpi_results['Average Queue Time']['Normal Technical Queue'] = 0
+    kpi_results['Average Queue Time']['Special CallBack Queue'] = 0
+    kpi_results['Average Queue Time']['Normal CallBack Queue'] = 0
+
     for i in data['Users'].keys():
         if data['Users'][i][5] == "Special":
             if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
                 if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
-                    kpi_results['Special Users time in queue( with out technical)'] += data['Users'][i][1] - \
-                                                                                       data['Users'][i][0]
-                    data['Number of special users( with out technical)'] += 1
+                    if data['Users'][i][6] is None:
+                        kpi_results['Average Queue Time']['Special Queue'] += data['Users'][i][1] - \
+                                                                                           data['Users'][i][0]
+                        kpi_results['Numbers']['Special Queue'] += 1
+                        kpi_results['Max Queue Time']['Special Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special Queue'], (data['Users'][i][1]-data['Users'][i][0]))
+                    elif data['Users'][i][6] == 'it_is_CallBack':
 
+                        kpi_results['Average Queue Time']['Special CallBack Queue'] += data['Users'][i][1] - \
+                                                                                           data['Users'][i][0]
+                        kpi_results['Numbers']['Special CallBack Queue'] += 1
+                        kpi_results['Max Queue Time']['Special CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special CallBack Queue'], (data['Users'][i][1]-data['Users'][i][0]))
                 if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
-                    kpi_results['Special Users time in queue( technical)'] += data['Users'][i][3] - data['Users'][i][2]
-                    data['Number of special users( technical)'] += 1
+                    if data['Users'][i][6] is None:
+                        kpi_results['Average Queue Time']['Special Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
+                        kpi_results['Numbers']['Special Technical Queue'] += 1
+                        kpi_results['Max Queue Time']['Special Technical Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special Technical Queue'], (data['Users'][i][3]-data['Users'][i][2]))
+                    elif data['Users'][i][6] == 'it_is_CallBack':
+                        kpi_results['Average Queue Time']['Special CallBack Queue'] += data['Users'][i][1] - \
+                                                                                           data['Users'][i][0]
+                        kpi_results['Numbers']['Special CallBack Queue'] += 1
+                        kpi_results['Max Queue Time']['Special CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special CallBack Queue'], (data['Users'][i][1]-data['Users'][i][0]))
 
         if data['Users'][i][5] == "Normal":
             if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
                 if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
-                    kpi_results['Normal Users time in queue( with out technical)'] += data['Users'][i][1] - \
-                                                                                      data['Users'][i][0]
-                    data['Number of Normal users( with out technical)'] += 1
+                    if data['Users'][i][6] is None:
+                        kpi_results['Average Queue Time']['Normal Queue'] += data['Users'][i][1] - \
+                                                                                          data['Users'][i][0]
+                        kpi_results['Numbers']['Normal Queue'] += 1
+                        kpi_results['Max Queue Time']['Normal Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal Queue'], (data['Users'][i][1]-data['Users'][i][0]))
+                    elif data['Users'][i][6] == 'it_is_CallBack':
+                        kpi_results['Average Queue Time']['Normal CallBack Queue'] += data['Users'][i][1] - \
+                                                                                           data['Users'][i][0]
+                        kpi_results['Numbers']['Normal CallBack Queue'] += 1
+                        kpi_results['Max Queue Time']['Normal CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal CallBack Queue'], (data['Users'][i][1]-data['Users'][i][0]))
                 if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
-                    kpi_results['Normal Users time in queue( technical)'] += data['Users'][i][3] - data['Users'][i][2]
-                    data['Number of Normal users( technical)'] += 1
-
-    kpi_results['Special Users time in queue( with out technical)'] = kpi_results['Special Users time in queue( with out technical)'] / \
-                                                                      data['Number of special users( with out technical)']
-    kpi_results['Normal Users time in queue( with out technical)'] = kpi_results['Normal Users time in queue( with out technical)'] / \
-                                                                     data['Number of Normal users( with out technical)']
-    kpi_results['Special Users time in queue( technical)'] = kpi_results['Special Users time in queue( technical)'] / \
-                                                             data['Number of special users( technical)']
-    kpi_results['Normal Users time in queue( technical)'] = kpi_results['Normal Users time in queue( technical)'] / \
-                                                            data['Number of Normal users( technical)']
-
+                    if data['Users'][i][6] is None:
+                        kpi_results['Average Queue Time']['Normal Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
+                        kpi_results['Numbers']['Normal Technical Queue'] += 1
+                        kpi_results['Max Queue Time']['Normal Technical Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal Technical Queue'], (data['Users'][i][3]-data['Users'][i][2]))
+                    elif data['Users'][i][6] == 'it_is_CallBack':
+                        kpi_results['Average Queue Time']['Normal CallBack Queue'] += data['Users'][i][1] - \
+                                                                                           data['Users'][i][0]
+                        kpi_results['Numbers']['Normal CallBack Queue'] += 1
+                        kpi_results['Max Queue Time']['Normal CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal CallBack Queue'], (data['Users'][i][1]-data['Users'][i][0]))
+    kpi_results['Average Queue Time']['Special Queue'] = kpi_results['Average Queue Time']['Special Queue'] / \
+                                                                      kpi_results['Numbers']['Special Queue']
+    kpi_results['Average Queue Time']['Normal Queue'] = kpi_results['Average Queue Time']['Normal Queue'] / \
+                                                                     kpi_results['Numbers']['Normal Queue']
+    kpi_results['Average Queue Time']['Special Technical Queue'] = kpi_results['Average Queue Time']['Special Technical Queue'] / \
+                                                             kpi_results['Numbers']['Special Technical Queue']
+    kpi_results['Average Queue Time']['Normal Technical Queue'] = kpi_results['Average Queue Time']['Normal Technical Queue'] / \
+                                                            kpi_results['Numbers']['Normal Technical Queue']
+    kpi_results['Average Queue Time']['Special CallBack Queue'] = kpi_results['Average Queue Time']['Special CallBack Queue'] / \
+                                                             kpi_results['Numbers']['Special CallBack Queue']
+    kpi_results['Average Queue Time']['Normal CallBack Queue'] = kpi_results['Average Queue Time']['Normal CallBack Queue'] / \
+                                                            kpi_results['Numbers']['Normal CallBack Queue']
     server_number = {"Amateur": 3, "Expert": 2, "Technical": 2}
     kpi_results['Special Users time in system duration'] = 0
     kpi_results['number of Special Users in system with no waiting'] = 0
@@ -629,9 +686,9 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
                         kpi_results['number of Special Users in system with no waiting'] += 1
 
     kpi_results['Special Users time in system duration'] = kpi_results['Special Users time in system duration'] / \
-                    (data['Number of special users( technical)'] + data['Number of special users( with out technical)'])
+                    (kpi_results['Numbers']['Special Technical Queue'] + kpi_results['Numbers']['Special Queue'])
     kpi_results['number of Special Users in system with no waiting'] = kpi_results['number of Special Users in system with no waiting'] / \
-                    (data['Number of special users( technical)'] + data['Number of special users( with out technical)'])
+                    (kpi_results['Numbers']['Special Technical Queue'] + kpi_results['Numbers']['Special Queue'])
 
     kpi_results['Average Queue Length'] = {}
     for i in data['Cumulative Stats']['Area Under Queue Length Curve'].keys():
@@ -641,14 +698,6 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     for i in data['Maximum Queue Length'].keys():
         kpi_results['Max Queue Length'][i] = data['Maximum Queue Length'][i]
 
-    kpi_results['Average Queue Time'] = {}
-    for i in data['Cumulative Stats']['Area Under Waiting time'].keys():
-        kpi_results['Average Queue Time'][i] = data['Cumulative Stats']['Area Under Waiting time'][i] / simulation_time
-
-    kpi_results['Max Queue Time'] = {}
-    for i in data['Maximum Waiting time'].keys():
-        kpi_results['Max Queue Time'][i] = data['Maximum Waiting time'][i]
-
     kpi_results['Server Utilization'] = {}
     for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
         kpi_results['Server Utilization'][i] = data['Cumulative Stats']['Area Under Server Busy time'][i] / \
@@ -657,15 +706,98 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     return kpi_results
 
 
-kpi_result = calculate_kpi(data, 43200)
+def trace_excel_maker(trace_list: list):
+    trace = pd.DataFrame(trace_list)
 
-trace = pd.DataFrame(trace_list)
+    columns = list(state.keys())
+    columns.insert(0, 'Clock')
+    columns.insert(1, 'Current Event')
 
-columns = ['Clock', 'Current Event', 'Normal Queue', 'Special Queue', 'Normal CallBack Queue',
-           'Special CallBack Queue', 'Expert Server Status', 'Amateur Server Status', 'Technical Server Status',
-           'Special Technical Queue', 'Normal Technical Queue', 'Shift Status']
+    columns.extend([f'fel{i}' for i in range(1, trace.shape[1] - 11)])  # to add future event list to trace dataframe
+    trace = pd.DataFrame(trace_list, columns=columns)
+    trace.to_excel('C:/Users/Lenovo/Desktop/trace_dataframe.xlsx', engine='xlsxwriter')
 
-columns.extend([f'fel{i}' for i in range(1, trace.shape[1] - 11)])  # to add future event list to trace dataframe
-trace = pd.DataFrame(trace_list, columns=columns)
 
-trace.to_excel('C:/Users/Lenovo/Desktop/trace_dataframe.xlsx', engine='xlsxwriter')
+def calculate_kpi_estimation(replication: int, alpha = 0.05):
+    kpi_result_data = {'Average Queue Length': {'Normal Queue': [],
+                                                'Special Queue': [],
+                                                'Normal CallBack Queue': [],
+                                                'Special CallBack Queue': [],
+                                                'Normal Technical Queue': [],
+                                                'Special Technical Queue': []},
+                       'Max Queue Length': {'Normal Queue': [],
+                                            'Special Queue': [],
+                                            'Normal CallBack Queue': [],
+                                            'Special CallBack Queue': [],
+                                            'Normal Technical Queue': [],
+                                            'Special Technical Queue': []},
+                       'Average Queue Time': {'Normal Queue': [],
+                                              'Special Queue': [],
+                                              'Normal CallBack Queue': [],
+                                              'Special CallBack Queue': [],
+                                              'Normal Technical Queue': [],
+                                              'Special Technical Queue': []},
+                       'Max Queue Time': {'Normal Queue': [],
+                                          'Special Queue': [],
+                                          'Normal CallBack Queue': [],
+                                          'Special CallBack Queue': [],
+                                          'Normal Technical Queue': [],
+                                          'Special Technical Queue': []},
+                       'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
+                       'Special Users time in system duration': [],
+                       'Number of Special users in system with no waiting': []}
+
+    kpi_result_estimation = {'Average Queue Length': {'Normal Queue': [],
+                                                      'Special Queue': [],
+                                                      'Normal CallBack Queue': [],
+                                                      'Special CallBack Queue': [],
+                                                      'Normal Technical Queue': [],
+                                                      'Special Technical Queue': []},
+                       'Max Queue Length': {'Normal Queue': [],
+                                            'Special Queue': [],
+                                            'Normal CallBack Queue': [],
+                                            'Special CallBack Queue': [],
+                                            'Normal Technical Queue': [],
+                                            'Special Technical Queue': []},
+                       'Average Queue Time': {'Normal Queue': [],
+                                              'Special Queue': [],
+                                              'Normal CallBack Queue': [],
+                                              'Special CallBack Queue': [],
+                                              'Normal Technical Queue': [],
+                                              'Special Technical Queue': []},
+                       'Max Queue Time': {'Normal Queue': [],
+                                          'Special Queue': [],
+                                          'Normal CallBack Queue': [],
+                                          'Special CallBack Queue': [],
+                                          'Normal Technical Queue': [],
+                                          'Special Technical Queue': []},
+                       'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
+                       'Special Users time in system duration': [],
+                       'Number of Special users in system with no waiting': []}
+
+    for r in range(replication):
+        data = simulation(30 * 24 * 60)[0]
+        kpi_result = calculate_kpi(data, 30 * 24 * 60)
+
+        for i in kpi_result_data.keys():
+            if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+                for j in kpi_result_data[i]:
+                    kpi_result_data[i][j].append(kpi_result[i][j])
+            else:
+                kpi_result_data[i].append(kpi_result[i])
+
+    for i in kpi_result_data.keys():
+        if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+            for j in kpi_result_data[i]:
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]))
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) - np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) + np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+        else:
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]))
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) - np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) + np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+
+    return kpi_result_estimation
+
+
+print(calculate_kpi_estimation(10))
