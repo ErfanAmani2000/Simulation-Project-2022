@@ -707,6 +707,11 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
 
 
 def trace_excel_maker(trace_list: list):
+    """
+
+    param trace_list:
+    return:
+    """
     trace = pd.DataFrame(trace_list)
 
     columns = list(state.keys())
