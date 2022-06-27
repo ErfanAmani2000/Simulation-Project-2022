@@ -3,6 +3,8 @@ import random
 import math
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 
 def starting_state():
@@ -131,7 +133,7 @@ def starting_state():
 
 
 def fel_maker(future_event_list: list, event_type: str, clock: float, state: dict, user: list = None,
-              disruption: str = 'No'):
+              disruption: str = 'No', parameters = parameters_felmaker ):
     """
     This function is supposed to set the next event into future event list
     param future_event_list: list that contains all future events
@@ -142,9 +144,9 @@ def fel_maker(future_event_list: list, event_type: str, clock: float, state: dic
     param disruption: whether the next event is set in disruption conditions or not
     """
     event_time = 0
-    inter_arrival_param = {1: 3, 2: 1, 3: 2}
+    inter_arrival_param = parameters['inter_arrival_param']
     disruption_inter_arrival_param = {1: 2, 2: 1 / 2, 3: 1}
-    service_time_param = {"Amateur": 7, "Expert": 3}
+    service_time_param = parameters['service_time_param']
 
     if event_type == 'Call Start':
         if disruption == 'No':  # if the system is not in the disruption condition ...
@@ -156,7 +158,7 @@ def fel_maker(future_event_list: list, event_type: str, clock: float, state: dic
         event_time = clock + exponential(service_time_param[user[2]])
 
     elif event_type == 'Technical Call End':
-        event_time = clock + exponential(10)
+        event_time = clock + exponential(parameters['service_time_technical'])
 
     elif event_type == 'Disruption Start':
         event_time = clock + 1440 * random.randint(1, 30)
@@ -230,7 +232,7 @@ def data_queue_calculater(data: dict, state: dict, clock: float, name: str):
     data['Last Time Queue Length Changed']['{} Queue'.format(name)] = clock
     data['Maximum Queue Length']['{} Queue'.format(name)] = max(data['Maximum Queue Length']['{} Queue'.format(name)],
                                                                 state['{} Queue'.format(name)])
-
+    
 
 def data_queue_user(data: dict, clock: float, name: str, user=None, technically='No', has_CallBack = 'No'):
     parameter = {"No": 1, "Yes": 3}  # to store clock in right position
@@ -337,13 +339,13 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
         fel_maker(future_event_list, 'Call Start', clock, state, new_user, disruption='Yes')
 
 
-def call_end(future_event_list: list, state: dict, clock: float, data: dict, user: list):
+def call_end(future_event_list: list, state: dict, clock: float, data: dict, user: list, parameters = percent_needtechnical):
     """
     This function is supposed to implement call end event that is fully described in project's report.
     """
     data['Users'][user[0]][2] = clock  # here we store user's call-end time in user's dictionary
 
-    if random.random() < 0.15:  # according to historical data, 15% of users need technical advice
+    if random.random() < parameters:  # according to historical data, 15% of users need technical advice
         if state['Technical Server Status'] == 2:  # if all technical users are busy at the time ...
             if user[1] == 'Normal':  # if a normal user wants to use technical advice ...
                 data['Last Queue Length']['Normal Technical Queue'] = state['Normal Technical Queue']
@@ -385,7 +387,8 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
 
                         data_queue_calculater(data, state, clock, 'Special CallBack')
 
-                        fel_maker(future_event_list, 'Call End', clock, state, [first_customer_in_queue, "", 'Expert', potential])
+                        fel_maker(future_event_list, 'Call End', clock, state,
+                                  [first_customer_in_queue, "", 'Expert', potential])
                     else:  # if special user's call-back queue is empty ...
                         if state['Normal CallBack Queue'] > 0:  # whether normal user's call-back queue is not empty ...
                             data['Last Queue Length']['Normal CallBack Queue'] = state['Normal CallBack Queue']
@@ -413,6 +416,7 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
 
                 fel_maker(future_event_list, 'Call End', clock, state,
                           [first_customer_in_queue, '', 'Expert', potential])
+
 
     elif user[2] == 'Amateur':  # if the server that want to end his/her last call is amateur ...
         if state['Normal Queue'] > 0:  # if normal user's queue is not empty ...
@@ -523,7 +527,7 @@ def trace_maker(state: dict, clock: float, sorted_fel: list, trace_list: list, c
     trace_list.append(trace_data)
 
 
-def simulation(simulation_time: float, trace_creator = False) -> dict:
+def simulation(simulation_time: float) -> dict:
     """
     This function is meant to do the simulation by help of introduced events.
     param simulation_time: this project is terminating simulation, so this parameter is simulation end time.
@@ -538,9 +542,7 @@ def simulation(simulation_time: float, trace_creator = False) -> dict:
         current_event = sorted_fel[0]  # find imminent event
         clock = current_event['Event Time']  # advance time to current event time
         user = current_event['User']  # find the user of that event
-
-        if trace_creator:
-            trace_maker(state, clock, sorted_fel, trace_list, current_event)
+        trace_maker(state, clock, sorted_fel, trace_list, current_event)
 
         if clock < simulation_time:  # the if block below is ganna call proper event function for that event type
             if current_event['Event Type'] == 'Call Start':
@@ -564,9 +566,88 @@ def simulation(simulation_time: float, trace_creator = False) -> dict:
 
     return data, state, trace_list
 
+#parameters_felmaker ={"inter_arrival_param":{1: 3, 2: 1, 3: 2} , "service_time_param":{"Amateur": 7, "Expert": 3} ,"service_time_technical":10 }
+#percent_needtechnical = 0.15
+#data, state, trace_list = simulation(30 * 24 * 60)
 
-data, state, trace_list = simulation(30 * 24 * 60)
+def ploting(x, y, x_label = "inter_arrival_param",title = 'Normal Queue'):
+    plt.figure(figsize=(3,2))   
+    plt.scatter(x,y,alpha=0.4)
+    z = np.polyfit(x, y, 4)
+    p = np.poly1d(z)
+    plt.plot(x,p(x),'--')
+    plt.title(title, size=14)
+    error = [np.std(y) for i in range(len(x))]
+    z1 = np.polyfit(x, error, 8)
+    p1= np.poly1d(z1)
+    plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2),alpha=0.2)
+    plt.xlabel(x_label)
+#    plt.ylabel(y_label)
+    #    plt.legend()  
+    plt.show()
+    
 
+def sensitivity_analysis():
+    parameters_felmaker ={"inter_arrival_param":{1: 3, 2: 1, 3: 2} , "service_time_param":{"Amateur": 7, "Expert": 3} ,"service_time_technical":10 }
+    percent_needtechnical = 0.15
+    
+    x,y1,y2,y3 = {1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]}
+    for i in range(1,4):
+        
+        for j in range(0,10):
+            
+            parameters_felmaker['inter_arrival_param'][i] = j * 0.4
+            data, state, trace_list = simulation(30 * 24 * 60)
+            kpi_result = calculate_kpi(data, 43200)
+            x[i].append(j * 0.4)
+            y1[i].append(kpi_result['Average Queue Length']['Normal Queue'])
+            y2[i].append(kpi_result['Average Queue Length']['Normal Technical Queue'])
+            y3[i].append(kpi_result['Average Queue Time']['Special Queue'])
+        ploting(x[i], y1[i],'inter_arrival_param in shift of {}'.format(i),'Normal Queue')
+        ploting(x[i], y2[i], 'inter_arrival_param in shift of {}'.format(i),'Normal Technical Queue')
+        ploting(x[i], y3[i],'inter_arrival_param in shift of {}'.format(i),'Special Queue')
+
+    x,y1,y2,y3 = {1:[],2:[]},{1:[],2:[]},{1:[],2:[]},{1:[],2:[]}
+    for i in range(1,3):
+
+        for j in range(0,10):    
+            parameters_felmaker['service_time_param'][i] = j 
+            data, state, trace_list = simulation(30 * 24 * 60)
+            kpi_result = calculate_kpi(data, 43200)
+            x[i].append(j)
+            y1[i].append(kpi_result['Average Queue Length']['Normal Queue'])
+            y2[i].append(kpi_result['Average Queue Length']['Normal Technical Queue'])
+            y3[i].append(kpi_result['Average Queue Time']['Special Queue'])
+        ploting(x[i], y1[i],'Average Queue Length in shift of {}'.format(i),'Normal Queue')
+        ploting(x[i], y2[i], 'Average Queue Length in shift of {}'.format(i),'Normal Technical Queue')
+        ploting(x[i], y3[i],'Average Queue Length in shift of {}'.format(i),'Special Queue')
+
+        
+    x,y1,y2,y3 = [],[],[],[]
+    for j in range(0,15):    
+        parameters_felmaker['service_time_technical'] = j 
+        data, state, trace_list = simulation(30 * 24 * 60)
+        kpi_result = calculate_kpi(data, 43200)
+        x.append(j)
+        y1.append(kpi_result['Average Queue Length']['Normal Queue'])
+        y2.append(kpi_result['Average Queue Length']['Normal Technical Queue'])
+        y3.append(kpi_result['Average Queue Time']['Special Queue'])
+    ploting(x, y1,'service_time_technical','Normal Queue')
+    ploting(x, y2,'service_time_technical','Normal Technical Queue')
+    ploting(x, y3,'service_time_technical','Special Queue')
+    
+    x,y1,y2,y3 = [],[],[],[]
+    for j in range(0,7):    
+        percent_needtechnical = j / 15
+        data, state, trace_list = simulation(30 * 24 * 60)
+        kpi_result = calculate_kpi(data, 43200)
+        x.append(j/15)
+        y1.append(kpi_result['Average Queue Length']['Normal Queue'])
+        y2.append(kpi_result['Average Queue Length']['Normal Technical Queue'])
+        y3.append(kpi_result['Average Queue Time']['Special Queue'])
+    ploting(x, y1,'service_time_technical','Normal Queue')
+    ploting(x, y2,'service_time_technical','Normal Technical Queue')
+    ploting(x, y3,'service_time_technical','Special Queue')
 
 def calculate_kpi(data: dict, simulation_time: float) -> dict:
     """
@@ -671,23 +752,23 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
                                                             kpi_results['Numbers']['Normal CallBack Queue']
     server_number = {"Amateur": 3, "Expert": 2, "Technical": 2}
     kpi_results['Special Users time in system duration'] = 0
-    kpi_results['number of Special Users in system with no waiting'] = 0
+    kpi_results['Percentage of Special Users in system with no waiting'] = 0
     for i in data['Users'].keys():
         if data['Users'][i][5] == "Special":
             if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
                 if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
                     kpi_results['Special Users time in system duration'] += data['Users'][i][2] - data['Users'][i][0]
                     if (data['Users'][i][1] - data['Users'][i][0]) == 0:
-                        kpi_results['number of Special Users in system with no waiting'] += 1
+                        kpi_results['Percentage of Special Users in system with no waiting'] += 1
                 elif (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
                     kpi_results['Special Users time in system duration'] += data['Users'][i][4] - data['Users'][i][0]
                     if (data['Users'][i][3] - data['Users'][i][2] == 0) and (
                             data['Users'][i][1] - data['Users'][i][0] == 0):
-                        kpi_results['number of Special Users in system with no waiting'] += 1
+                        kpi_results['Percentage of Special Users in system with no waiting'] += 1
 
     kpi_results['Special Users time in system duration'] = kpi_results['Special Users time in system duration'] / \
                     (kpi_results['Numbers']['Special Technical Queue'] + kpi_results['Numbers']['Special Queue'])
-    kpi_results['number of Special Users in system with no waiting'] = kpi_results['number of Special Users in system with no waiting'] / \
+    kpi_results['Percentage of Special Users in system with no waiting'] = kpi_results['Percentage of Special Users in system with no waiting'] / \
                     (kpi_results['Numbers']['Special Technical Queue'] + kpi_results['Numbers']['Special Queue'])
 
     kpi_results['Average Queue Length'] = {}
@@ -706,21 +787,21 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     return kpi_results
 
 
-def trace_excel_maker(trace_list: list):
-    """
-
-    param trace_list:
-    return:
-    """
-    trace = pd.DataFrame(trace_list)
-
-    columns = list(state.keys())
-    columns.insert(0, 'Clock')
-    columns.insert(1, 'Current Event')
-
-    columns.extend([f'fel{i}' for i in range(1, trace.shape[1] - 11)])  # to add future event list to trace dataframe
-    trace = pd.DataFrame(trace_list, columns=columns)
-    trace.to_excel('C:/Users/Lenovo/Desktop/trace_dataframe.xlsx', engine='xlsxwriter')
+#def trace_excel_maker(trace_list: list):
+#    """
+#
+#    param trace_list:
+#    return:
+#    """
+#    trace = pd.DataFrame(trace_list)
+#
+#    columns = list(state.keys())
+#    columns.insert(0, 'Clock')
+#    columns.insert(1, 'Current Event')
+#
+#    columns.extend([f'fel{i}' for i in range(1, trace.shape[1] - 11)])  # to add future event list to trace dataframe
+#    trace = pd.DataFrame(trace_list, columns=columns)
+#    trace.to_excel('C:/Users/Lenovo/Desktop/trace_dataframe.xlsx', engine='xlsxwriter')
 
 
 def calculate_kpi_estimation(replication: int, alpha = 0.05):
@@ -750,7 +831,7 @@ def calculate_kpi_estimation(replication: int, alpha = 0.05):
                                           'Special Technical Queue': []},
                        'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
                        'Special Users time in system duration': [],
-                       'Number of Special users in system with no waiting': []}
+                       'Percentage of Special users in system with no waiting': []}
 
     kpi_result_estimation = {'Average Queue Length': {'Normal Queue': [],
                                                       'Special Queue': [],
@@ -778,21 +859,21 @@ def calculate_kpi_estimation(replication: int, alpha = 0.05):
                                           'Special Technical Queue': []},
                        'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
                        'Special Users time in system duration': [],
-                       'Number of Special users in system with no waiting': []}
+                       'Percentage of Special users in system with no waiting': []}
 
     for r in range(replication):
         data = simulation(30 * 24 * 60)[0]
         kpi_result = calculate_kpi(data, 30 * 24 * 60)
 
         for i in kpi_result_data.keys():
-            if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+            if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Percentage of Special users in system with no waiting'):
                 for j in kpi_result_data[i]:
                     kpi_result_data[i][j].append(kpi_result[i][j])
             else:
                 kpi_result_data[i].append(kpi_result[i])
 
     for i in kpi_result_data.keys():
-        if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+        if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Percentage of Special users in system with no waiting'):
             for j in kpi_result_data[i]:
                 kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]))
                 kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) - np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
@@ -805,4 +886,4 @@ def calculate_kpi_estimation(replication: int, alpha = 0.05):
     return kpi_result_estimation
 
 
-print(calculate_kpi_estimation(10))
+kpi_result_estimation= calculate_kpi_estimation(10)
