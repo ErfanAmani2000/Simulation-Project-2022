@@ -127,7 +127,7 @@ def fel_maker(future_event_list: list, event_type: str, clock: float, state: dic
     event_time = 0
     inter_arrival_param = {1: 3, 2: 1, 3: 2}
     disruption_inter_arrival_param = {1: 2, 2: 1 / 2, 3: 1}
-    service_time_param = {"Amateur": 27, "Expert": 3}
+    service_time_param = {"Amateur": 7, "Expert": 3}
     if event_type == 'Call Start':
         if disruption == 'No':  # if the system is not in the disruption condition ...
             event_time = clock + exponential(inter_arrival_param[state['Shift Status']])
@@ -214,7 +214,8 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
     """
     This function is supposed to implement call start event that is fully described in project's report.
     """
-    data['Users'][user[0]] = [clock, -1, -1, None, None, user[1], None]  # -1 means that the user did not receive service
+    data['Users'][user[0]] = [clock,       -1,          -1,        None,     None,    user[1],      None,        None    ]  # -1 means that the user did not receive service
+    #                        arrival,start service,end  service,start tech,end tech,type user, has call_back, type service
     if user[1] == 'Normal':  # if a normal user call ...
         if state['Amateur Server Status'] == 3:  # if all amateur server are busy ...
             if state['Expert Server Status'] < 2:  # if at least one expert server is free ...
@@ -223,6 +224,7 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
                 user[2] = 'Expert'
                 data_server_calculater(data, state, clock, 'Expert')
                 data['Users'][user[0]][1] = clock
+                data['Users'][user[0]][7] = "Amateur"
                 fel_maker(future_event_list, 'Call End', clock, state, [user[0], 'Normal', 'Expert', 0])
             else:  # if all expert servers are also busy at the time ...
                 data['Last Queue Length']['Normal Queue'] = state['Normal Queue']
@@ -248,6 +250,7 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
             user[2] = 'Amateur'
             data_server_calculater(data, state, clock, 'Amateur')
             data['Users'][user[0]][1] = clock
+            data['Users'][user[0]][7] = "Amateur"
             fel_maker(future_event_list, 'Call End', clock, state, [user[0], 'Normal', 'Amateur', 0])
     else:  # if a special user call ...
         data['Number of special users'] += 1
@@ -257,6 +260,7 @@ def call_start(future_event_list: list, state: dict, clock: float, data: dict, u
             user[2] = 'Expert'
             data_server_calculater(data, state, clock, 'Expert')
             data['Users'][user[0]][1] = clock
+            data['Users'][user[0]][7] = "Expert"
             data['Number Of No Waiting Special User'] += 1
             fel_maker(future_event_list, 'Call End', clock, state, [user[0], 'Special', 'Expert', 0])
         else:  # if all expert servers are busy ...
@@ -291,6 +295,7 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
     This function is supposed to implement call end event that is fully described in project's report.
     """
     data['Users'][user[0]][2] = clock  # here we store user's call-end time in user's dictionary
+    data['Users'][user[0]][7] = user[2] # here we store user's setvice type in user's dictionary
     if random.random() < 0.15:  # according to historical data, 15% of users need technical advice
         if state['Technical Server Status'] == 2:  # if all technical users are busy at the time ...
             if user[1] == 'Normal':  # if a normal user wants to use technical advice ...
@@ -364,6 +369,7 @@ def call_end(future_event_list: list, state: dict, clock: float, data: dict, use
                     first_customer_in_queue, potential = data_queue_user(data, clock, 'Normal CallBack', has_CallBack= "Yes")
                     data_queue_calculater(data, state, clock, 'Normal CallBack')
                     data['Users'][first_customer_in_queue][1] = clock
+                    
                     fel_maker(future_event_list, 'Call End', clock, state,
                               [first_customer_in_queue, "", 'Amateur', potential])
                 else:  # if special user's call-back queue is empty at the moment ...
@@ -482,7 +488,7 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     in a dictionary called kpi_results
     return: kpi_results
     """
-    cumulative = {'Technical': 0}
+    cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
 
     kpi_results = dict()
     #
@@ -511,8 +517,13 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
     kpi_results['Average Queue Time']['Normal CallBack Queue'] = 0
     for i in data['Users'].keys():
         if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
+            if data['Users'][i][7] == "Amateur":
+                cumulative["Amateur"] += data['Users'][i][2]-data['Users'][i][1]
+            else:
+                cumulative["Expert"] += data['Users'][i][2]-data['Users'][i][1]
+            
             if data['Users'][i][5] == "Special":
-#                cumulative["Expert"] += data['Users'][i][2]-data['Users'][i][1]
+                
                 if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
                     if data['Users'][i][6] is None:
                         kpi_results['Average Queue Time']['Special Queue'] += data['Users'][i][1] - \
@@ -549,7 +560,7 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
                         kpi_results['Max Queue Time']['Special CallBack Queue'] = \
                                             max(kpi_results['Max Queue Time']['Special CallBack Queue'], (data['Users'][i][1]-data['Users'][i][0]))
             if data['Users'][i][5] == "Normal":
-#                cumulative["Amateur"] += data['Users'][i][2]-data['Users'][i][1]
+                
                 
                 if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
                     if data['Users'][i][6] is None:
@@ -626,12 +637,12 @@ def calculate_kpi(data: dict, simulation_time: float) -> dict:
         kpi_results['Max Queue Length'][i] = data['Maximum Queue Length'][i]
     kpi_results['Server Utilization'] = {}
     for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
-        if i == "Technical":
-            kpi_results['Server Utilization'][i] = cumulative[i] / \
-                                               ((simulation_time-1000) * server_number[i]) 
-        else:
-            kpi_results['Server Utilization'][i] = data['Cumulative Stats']['Area Under Server Busy time'][i] / \
-                                           ((simulation_time-1000) * server_number[i]) # 1000 is for finish deleted time
+#        if i == "Technical":
+        kpi_results['Server Utilization'][i] = cumulative[i] / \
+                                           ((simulation_time) * server_number[i]) 
+#        else:
+#            kpi_results['Server Utilization'][i] = data['Cumulative Stats']['Area Under Server Busy time'][i] / \
+#                                           ((simulation_time-1000) * server_number[i]) # 1000 is for finish deleted time
 
     return kpi_results
 
