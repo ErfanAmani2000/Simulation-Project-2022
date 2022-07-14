@@ -186,6 +186,7 @@ def data_server_calculater(data: dict, state: dict, clock: float, name: str):
                                                             * (clock - data['Last Time Server Status Changed'][name])
     data['Last Time Server Status Changed'][name] = clock
 def data_queue_calculater(data: dict, state: dict, clock: float, name: str, temp = 0):
+
     """
     This function is supposed to calculate area under each queue length curve,
     and also the maximum queue length.
