@@ -3,23 +3,36 @@ import random
 import math
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class CallCenterSimulation:
     
     def __init__(self, inter_arrival_param, disruption_inter_arrival_param, service_time_param,
-                 technical_service_time_param, simulation_time):
+                 technical_service_time_param,percent_needtechnical, simulation_time):
         self.inter_arrival_param = inter_arrival_param
         self.disruption_inter_arrival_param = disruption_inter_arrival_param
         self.service_time_param = service_time_param
         self.technical_service_time_param = technical_service_time_param
+        self.percent_needtechnical = percent_needtechnical
         self.simulation_time = simulation_time
 
         self.clock = 0
         self.trace_list = []
 
 
+    def setter(self,inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
+                                  service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
+                                  simulation_time=30*24*60):
+        self.inter_arrival_param = inter_arrival_param
+        self.disruption_inter_arrival_param = disruption_inter_arrival_param
+        self.service_time_param = service_time_param
+        self.technical_service_time_param = technical_service_time_param
+        self.percent_needtechnical = percent_needtechnical
+        self.simulation_time = simulation_time
 
+        self.clock = 0
+        self.trace_list = []
     def starting_state(self):
 
         # State variables declaration
@@ -389,7 +402,7 @@ class CallCenterSimulation:
         self.data['Users'][self.user[0]][2] = self.clock  # here we store user's call-end time in user's dictionary
         self.data['Users'][self.user[0]][7] = self.user[2] # here we store user's setvice type in user's dictionary
 
-        if random.random() < 0.15:  # according to historical data, 15% of users need technical advice
+        if random.random() < self.percent_needtechnical :  # according to historical data, 15% of users need technical advice
             if self.state['Technical Server Status'] == 2:  # if all technical users are busy at the time ...
                 if self.user[1] == 'Normal':  # if a normal user wants to use technical advice ...
                     self.data['Last Queue Length']['Normal Technical Queue'] = self.state['Normal Technical Queue']
@@ -641,6 +654,7 @@ class CallCenterSimulation:
         in a dictionary called kpi_results
         return: kpi_results
         """
+        self.setter()
         data, state, trace_list = self.simulation()
         cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
 
@@ -791,7 +805,7 @@ class CallCenterSimulation:
 
 
 
-    def calculate_kpi_estimation(self, replication: int, alpha = 0.05) -> dict:
+    def calculate_kpi_estimation(self, replication = 5, alpha = 0.05) -> dict:
         """
         Parameters
         ----------
@@ -867,10 +881,87 @@ class CallCenterSimulation:
 
         return kpi_result_estimation
 
+    def ploting(x, y, x_label = "inter_arrival_param",title = 'Normal Queue'):
+        plt.figure(figsize=(3,2))   
+        plt.scatter(x,y,alpha=0.4)
+        z = np.polyfit(x, y, 4)
+        p = np.poly1d(z)
+        plt.plot(x,p(x),'--')
+        plt.title(title, size=14)
+        error = [np.std(y) for i in range(len(x))]
+        z1 = np.polyfit(x, error, 8)
+        p1= np.poly1d(z1)
+        plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2),alpha=0.2)
+        plt.xlabel(x_label)
+        #    plt.ylabel(y_label)
+        #    plt.legend()  
+        plt.show()
+
+    def sensitivity_analysis(self,Sensitivity_Variable = 'inter_arrival_param'):
+        parameters_felmaker ={"inter_arrival_param":{1: 3, 2: 1, 3: 2} , "service_time_param":{"Amateur": 7, "Expert": 3} ,"service_time_technical":10 }
+        percent_needtechnical = 0.15
+
+        if Sensitivity_Variable == 'inter_arrival_param':
+            x,y1,y2,y3 = {1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]}
+            for i in range(1,4):
+
+                for j in range(0,10):
+
+                    self.inter_arrival_param[i] = j * 0.4
+                    kpi_result_estimation = self.calculate_kpi_estimation()
+                    x[i].append(j * 0.4)
+                    y1[i].append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
+                    y2[i].append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
+                    y3[i].append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
+                self.ploting(x[i], y1[i],'inter_arrival_param in shift of {}'.format(i),'Normal Queue')
+                self.ploting(x[i], y2[i], 'inter_arrival_param in shift of {}'.format(i),'Normal Technical Queue')
+                self.ploting(x[i], y3[i],'inter_arrival_param in shift of {}'.format(i),'Special Queue')
+
+        elif Sensitivity_Variable == 'service_time_param':
+            x,y1,y2,y3 = {1:[],2:[]},{1:[],2:[]},{1:[],2:[]},{1:[],2:[]}
+            for i in range(1,3):
+
+                for j in range(0,10):    
+                    self.service_time_param[i] = j 
+                    kpi_result_estimation = self.calculate_kpi_estimation()
+                    x[i].append(j)
+                    y1[i].append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
+                    y2[i].append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
+                    y3[i].append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
+                self.ploting(x[i], y1[i],'Average Queue Length in shift of {}'.format(i),'Normal Queue')
+                self.ploting(x[i], y2[i], 'Average Queue Length in shift of {}'.format(i),'Normal Technical Queue')
+                self.ploting(x[i], y3[i],'Average Queue Length in shift of {}'.format(i),'Special Queue')
+
+        elif Sensitivity_Variable == 'service_time_technical':
+            x,y1,y2,y3 = [],[],[],[]
+            for j in range(0,15):    
+                self.service_time_technical = j 
+                kpi_result_estimation = self.calculate_kpi_estimation()
+                x.append(j)
+                y1.append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
+                y2.append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
+                y3.append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
+            self.ploting(x, y1,'service_time_technical','Normal Queue')
+            self.ploting(x, y2,'service_time_technical','Normal Technical Queue')
+            self.ploting(x, y3,'service_time_technical','Special Queue')
+        elif Sensitivity_Variable == 'percent_needtechnical':
+            x,y1,y2,y3 = [],[],[],[]
+            for j in range(0,7):    
+                self.percent_needtechnical = j / 15
+                kpi_result_estimation = self.calculate_kpi_estimation()
+                x.append(j/15)
+                y1.append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
+                y2.append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
+                y3.append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
+            self.ploting(x, y1,'service_time_technical','Normal Queue')
+            self.ploting(x, y2,'service_time_technical','Normal Technical Queue')
+            self.ploting(x, y3,'service_time_technical','Special Queue')
+
 
 
 simulation = CallCenterSimulation(inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
-                                  service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10,
+                                  service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
                                   simulation_time=30*24*60)
 
-result = simulation.simulation(2)
+#result = simulation.simulation(2)
+result = simulation.calculate_kpi_estimation()
