@@ -3,12 +3,15 @@ import random
 import math
 import pandas as pd
 import numpy as np
+import time
 import matplotlib.pyplot as plt
+
+start_time = time.time()
 
 
 class CallCenterSimulation:
     
-    def __init__(self, inter_arrival_param, disruption_inter_arrival_param, service_time_param,
+    def __init__(self, param_numbeer_of_amateur_server, param_callback_ratio, param_special_porportion, inter_arrival_param, disruption_inter_arrival_param, service_time_param,
                  technical_service_time_param,percent_needtechnical, simulation_time):
         self.inter_arrival_param = inter_arrival_param
         self.disruption_inter_arrival_param = disruption_inter_arrival_param
@@ -16,23 +19,32 @@ class CallCenterSimulation:
         self.technical_service_time_param = technical_service_time_param
         self.percent_needtechnical = percent_needtechnical
         self.simulation_time = simulation_time
+        self.param_special_porportion = param_special_porportion
+        self.param_callback_ratio = param_callback_ratio
+        self.param_numbeer_of_amateur_server = param_numbeer_of_amateur_server
 
         self.clock = 0
         self.trace_list = []
 
 
-    def setter(self,inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
-                                  service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
-                                  simulation_time=30*24*60):
+    def setter(self, param_numbeer_of_amateur_server=3, param_callback_ratio=0.5, param_special_porportion=0.3, 
+               inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
+               service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
+               simulation_time=30*24*60):
         self.inter_arrival_param = inter_arrival_param
         self.disruption_inter_arrival_param = disruption_inter_arrival_param
         self.service_time_param = service_time_param
         self.technical_service_time_param = technical_service_time_param
         self.percent_needtechnical = percent_needtechnical
         self.simulation_time = simulation_time
-
+        self.param_special_porportion = param_special_porportion
+        self.param_callback_ratio = param_callback_ratio
+        self.param_numbeer_of_amateur_server = param_numbeer_of_amateur_server
+        
         self.clock = 0
         self.trace_list = []
+        
+        
     def starting_state(self):
 
         # State variables declaration
@@ -157,7 +169,7 @@ class CallCenterSimulation:
         self.future_event_list.append({'Event Type': 'Disruption Start', 'Event Time': 0, 'User': ''})
         self.future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0, 'User': ''})
 
-        if random.random() > 0.3:
+        if random.random() > self.param_special_porportion:
             self.future_event_list.append({'Event Type': 'Call Start', 'Event Time': 0, 'User': [1, 'Normal', 'Amateur', 0]})
         else:
             self.future_event_list.append({'Event Type': 'Call Start', 'Event Time': 0, 'User': [1, 'Special', 'Expert', 0]})
@@ -298,7 +310,7 @@ class CallCenterSimulation:
                                             # arrival ,start service, end service, start tech, end tech, type user, has call_back, type service
 
         if self.user[1] == 'Normal':  # if a normal user call ...
-            if self.state['Amateur Server Status'] == 3:  # if all amateur server are busy ...
+            if self.state['Amateur Server Status'] == self.param_numbeer_of_amateur_server:  # if all amateur server are busy ...
                 if self.state['Expert Server Status'] < 2:  # if at least one expert server is free ...
                     self.data['Last Server Status']['Expert'] = self.state['Expert Server Status']
                     self.data_server_calculater('Expert')
@@ -314,7 +326,7 @@ class CallCenterSimulation:
                     self.data['Queue Users']['Normal Queue'][self.user[0]] = [self.clock, 0]
 
                     if self.state['Normal Queue'] > (4 + 1):  # if normal queue length is more than 4 ...
-                        if random.random() <= 0.5:  # according to historical data half of users will choose to use call-back option
+                        if random.random() <= self.param_callback_ratio:  # according to historical data half of users will choose to use call-back option
                             self.data['Last Queue Length']['Normal Queue'] = self.state['Normal Queue']
                             self.state['Normal Queue'] -= 1
                             self.data['Queue Users']['Normal Queue'].pop(self.user[0], None)
@@ -360,7 +372,7 @@ class CallCenterSimulation:
                 self.data['Queue Users']['Special Queue'][self.user[0]] = [self.clock, 0]
 
                 if self.state['Special Queue'] > (4 + 1):  # if special queue length is more than 4 ...
-                    if random.random() <= 0.5:  # according to historical data half of users will choose to use call-back option
+                    if random.random() <= self.param_callback_ratio:  # according to historical data half of users will choose to use call-back option
                         self.data['Last Queue Length']['Special Queue'] = self.state['Special Queue']
                         self.state['Special Queue'] -= 1
                         self.data['Queue Users']['Special Queue'].pop(self.user[0], None)
@@ -381,7 +393,7 @@ class CallCenterSimulation:
                    self. data_queue_calculater('Special', temp=1)
 
         new_user = [self.user[0] + 1, '', '', 0]
-        if random.random() <= 0.3:  # according to data, 30% of users that call this call center are special
+        if random.random() <= self.param_special_porportion:  # according to data, 30% of users that call this call center are special
             new_user[1] = 'Special'
 
         else:
@@ -749,7 +761,7 @@ class CallCenterSimulation:
         kpi_results['Average Queue Time']['Normal CallBack Queue'] = kpi_results['Average Queue Time']['Normal CallBack Queue'] / \
                                                                       kpi_results['Numbers']['Normal CallBack Queue']
 
-        server_number = {"Amateur": 3, "Expert": 2, "Technical": 2}
+        server_number = {"Amateur": self.param_numbeer_of_amateur_server, "Expert": 2, "Technical": 2}
         kpi_results['Special Users time in system duration'] = 0
         kpi_results['number of Special Users in system with no waiting'] = 0
 
@@ -805,7 +817,7 @@ class CallCenterSimulation:
 
 
 
-    def calculate_kpi_estimation(self, replication = 5, alpha = 0.05) -> dict:
+    def calculate_kpi_estimation(self, replication=25, alpha=0.05) -> dict:
         """
         Parameters
         ----------
@@ -822,7 +834,7 @@ class CallCenterSimulation:
             one are KPI lower and upper bound respectively
         """
 
-        def a():
+        def data_structure():
             return {'Average Queue Length': {'Normal Queue': [],
                                                         'Special Queue': [],
                                                         'Normal CallBack Queue': [],
@@ -850,13 +862,11 @@ class CallCenterSimulation:
                                 'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
                                 'Special Users time in system duration': [],
                                 'Number of Special users in system with no waiting': []}
-        kpi_result_data = a()
-
-        kpi_result_estimation = a()
+        kpi_result_data = data_structure()
+        kpi_result_estimation = data_structure()
 
 
         for r in range(replication):
-
             kpi_result = self.calculate_kpi()
 
             for i in kpi_result_data.keys():
@@ -881,9 +891,10 @@ class CallCenterSimulation:
 
         return kpi_result_estimation
 
-    def ploting(x, y, x_label = "inter_arrival_param",title = 'Normal Queue'):
+
+    def ploting(self,x, y, x_label = "inter_arrival_param", title = 'Normal Queue'):
         plt.figure(figsize=(3,2))   
-        plt.scatter(x,y,alpha=0.4)
+        plt.plot(x,y,alpha=0.4)
         z = np.polyfit(x, y, 4)
         p = np.poly1d(z)
         plt.plot(x,p(x),'--')
@@ -892,14 +903,11 @@ class CallCenterSimulation:
         z1 = np.polyfit(x, error, 8)
         p1= np.poly1d(z1)
         plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2),alpha=0.2)
-        plt.xlabel(x_label)
-        #    plt.ylabel(y_label)
-        #    plt.legend()  
+        plt.xlabel(x_label) 
         plt.show()
 
+
     def sensitivity_analysis(self,Sensitivity_Variable = 'inter_arrival_param'):
-        parameters_felmaker ={"inter_arrival_param":{1: 3, 2: 1, 3: 2} , "service_time_param":{"Amateur": 7, "Expert": 3} ,"service_time_technical":10 }
-        percent_needtechnical = 0.15
 
         if Sensitivity_Variable == 'inter_arrival_param':
             x,y1,y2,y3 = {1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]},{1:[],2:[],3:[]}
@@ -957,11 +965,36 @@ class CallCenterSimulation:
             self.ploting(x, y2,'service_time_technical','Normal Technical Queue')
             self.ploting(x, y3,'service_time_technical','Special Queue')
 
+    def warm_up(self):
+        self.setter(simulation_time = 3*30*24*60)
+        data = self.simulation()[0]
+        time = np.array([])
+        average_queue_each_time = np.array([])
+        for i in data['Users'].keys():  # for each user:
+            if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):  # Which he/she served in the system
+                if data['Users'][i][5] == "Normal":
+                    if data['Users'][i][6] is None:
+                        time = np.append(time, data['Users'][i][1])
+                        try:
+                            
+                            average_queue_new = ((data['Users'][i][1]-data['Users'][i][0])+ average_queue_each_time[-1]*len(average_queue_each_time))/(len(average_queue_each_time)+1)
+                            average_queue_each_time = np.append(average_queue_each_time,
+                                                               average_queue_new)
+                        except:
+                            average_queue_each_time = np.append(average_queue_each_time,
+                                                               0)
+        self.ploting(time,average_queue_each_time,x_label = "Time(min)", title = 'Average time of Normal Queue')
+        time_after_warmup = int(input("please add the T0 for warm up: "))  #########
+        self.ploting(time[time_after_warmup:],average_queue_each_time[time_after_warmup:],x_label = "Time(min)", title = 'Average time of Normal Queue')
+        
+    
+System_I = CallCenterSimulation(param_numbeer_of_amateur_server=3, param_callback_ratio=0, param_special_porportion=0.4, 
+                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
+                                simulation_time=30*24*60)
 
+#result = System_I.calculate_kpi_estimation(replication=25)
+System_I.warm_up()
 
-simulation = CallCenterSimulation(inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
-                                  service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_needtechnical=0.15,
-                                  simulation_time=30*24*60)
-
-#result = simulation.simulation(2)
-result = simulation.calculate_kpi_estimation()
+end_time = time.time()
+print('Execution time: {}'.format(end_time - start_time))
