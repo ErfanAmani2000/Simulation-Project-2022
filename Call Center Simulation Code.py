@@ -14,6 +14,7 @@ class CallCenterSimulation:
     def __init__(self, param_number_of_amateur_server, param_callback_ratio, param_special_proportion, inter_arrival_param,
                  disruption_inter_arrival_param, service_time_param, technical_service_time_param, percent_need_technical,
                  simulation_time):
+        self.sorted_fel = None
         self.service_time_technical = None
         self.future_event_list = list()
         self.data = dict()
@@ -822,7 +823,7 @@ class CallCenterSimulation:
 
 
 
-    def calculate_kpi_estimation(self, replication=25, alpha=0.05) -> dict:
+    def calculate_kpi_estimation(self, replication=25, alpha=0.05, kpi_category=None, kpi=None) -> dict:
         """
         Parameters
         ----------
@@ -873,7 +874,7 @@ class CallCenterSimulation:
 
         for r in range(replication):
             kpi_result = self.calculate_kpi()
-
+             
             for i in kpi_result_data.keys():
                 if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
                     for j in kpi_result_data[i]:
@@ -888,13 +889,16 @@ class CallCenterSimulation:
                     kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]))
                     kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) - np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
                     kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) + np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
-
+                    
             else:
                 kpi_result_estimation[i].append(np.mean(kpi_result_data[i]))
                 kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) - np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
                 kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) + np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
 
-        return kpi_result_estimation
+        if kpi_result_data is not None and kpi is not None:
+            kpi_output_data = kpi_result_data[kpi_category][kpi]
+        
+        return kpi_result_estimation, kpi_output_data
 
 
     @staticmethod
@@ -911,6 +915,7 @@ class CallCenterSimulation:
         plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
         plt.xlabel(x_label)
         plt.show()
+
 
 
     def sensitivity_analysis(self, Sensitivity_Variable = 'inter_arrival_param'):
@@ -971,6 +976,7 @@ class CallCenterSimulation:
             self.plotting(x, y2, 'service_time_technical', 'Normal Technical Queue')
             self.plotting(x, y3, 'service_time_technical', 'Special Queue')
 
+
     def warm_up(self):
         self.setter(simulation_time = 3*30*24*60)
         data = self.simulation()[0]
@@ -998,6 +1004,30 @@ System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback
                                 service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15,
                                 simulation_time=30*24*60)
 
-System_I.warm_up()
+System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4,
+                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15,
+                                simulation_time=30*24*60)
+
+
+def kpi_statistical_test(configuration_I, configuration_II, kpi, kpi_category=None, alpha=0.05):
+    
+    X = configuration_I.calculate_kpi_estimation(kpi_category=kpi_category, kpi=kpi)[1]
+    Y = configuration_II.calculate_kpi_estimation(kpi_category=kpi_category, kpi=kpi)[1]
+    
+    if stats.normaltest(X)[1] > alpha and stats.normaltest(Y)[1] > alpha:
+        p_value = stats.ttest_ind(X, Y)[1]
+    else:
+        p_value = stats.kruskal(X, Y)[1]
+    
+    if p_value > alpha:
+        print("First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi))
+    else:
+        print("Second system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi))
+
+
+kpi_statistical_test(System_I, System_II, kpi_category='Average Queue Time', kpi='Normal Queue')
+
+
 end_time = time.time()
 print('Execution time: {}'.format(end_time - start_time))
