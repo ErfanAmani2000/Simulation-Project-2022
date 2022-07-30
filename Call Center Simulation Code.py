@@ -998,7 +998,6 @@ System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback
                                 service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15,
                                 simulation_time=30*24*60)
 
-
 System_I.warm_up()
 end_time = time.time()
 print('Execution time: {}'.format(end_time - start_time))
