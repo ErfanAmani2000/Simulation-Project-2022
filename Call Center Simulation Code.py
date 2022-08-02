@@ -10,8 +10,13 @@ import matplotlib.pyplot as plt
 class CallCenterSimulation:
 
     def __init__(self, param_number_of_amateur_server, param_callback_ratio, param_special_proportion, inter_arrival_param,
-                 disruption_inter_arrival_param, service_time_param, technical_service_time_param, percent_need_technical,
-                 simulation_time):
+                  disruption_inter_arrival_param, service_time_param, technical_service_time_param, percent_need_technical,
+                  simulation_time):
+        self.waiting_time_replication_average = []
+        self.finishing_customers_replication_average = []
+        self.sorted_fel = None
+        self.current_event = None
+        self.user = None
         self.service_time_technical = None
         self.future_event_list = list()
         self.data = dict()
@@ -29,24 +34,6 @@ class CallCenterSimulation:
         self.clock = 0
         self.trace_list = []
 
-
-
-    def setter(self, param_number_of_amateur_server=3, param_callback_ratio=0.5, param_special_proportion=0.3,
-               inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 1 / 2, 3: 1},
-               service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15,
-               simulation_time=30*24*60):
-        self.inter_arrival_param = inter_arrival_param
-        self.disruption_inter_arrival_param = disruption_inter_arrival_param
-        self.service_time_param = service_time_param
-        self.technical_service_time_param = technical_service_time_param
-        self.percent_need_technical = percent_need_technical
-        self.simulation_time = simulation_time
-        self.param_special_proportion = param_special_proportion
-        self.param_callback_ratio = param_callback_ratio
-        self.param_number_of_amateur_server = param_number_of_amateur_server
-
-        self.clock = 0
-        self.trace_list = []
 
 
     def starting_state(self):
@@ -167,7 +154,6 @@ class CallCenterSimulation:
 
         # FEL initialization, and Starting events that initialize the simulation
         self.future_event_list.append({'Event Type': 'Shift Start/End', 'Event Time': 0, 'User': ''})
-        self.future_event_list.append({'Event Type': 'Disruption Start', 'Event Time': 0, 'User': ''})
         self.future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0, 'User': ''})
 
         if random.random() > self.param_special_proportion:
@@ -653,148 +639,6 @@ class CallCenterSimulation:
 
 
 
-    def calculate_kpi(self, inter_arrival_param={1: 3, 2: 1, 3: 2}) -> dict:
-        """
-        This function is meant to calculate all KPIs that described in project's report, then it stored them all
-        in a dictionary called kpi_results
-        return: kpi_results
-        """
-        self.setter(inter_arrival_param=inter_arrival_param)
-        data, state, trace_list = self.simulation()
-        cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
-
-        kpi_results = dict()
-
-        # In order to find number of peolpe in each queue
-        kpi_results['Numbers'] = {}
-        kpi_results['Numbers']['Special Queue'] = 0
-        kpi_results['Numbers']['Normal Queue'] = 0
-        kpi_results['Numbers']['Special Technical Queue'] = 0
-        kpi_results['Numbers']['Normal Technical Queue'] = 0
-        kpi_results['Numbers']['Special CallBack Queue'] = 0
-        kpi_results['Numbers']['Normal CallBack Queue'] = 0
-
-        # Maximum number of people in each queue
-        kpi_results['Max Queue Time'] = {}
-        kpi_results['Max Queue Time']['Special Technical Queue'] = 0
-        kpi_results['Max Queue Time']['Special Queue'] = 0
-        kpi_results['Max Queue Time']['Normal Technical Queue'] = 0
-        kpi_results['Max Queue Time']['Normal Queue'] = 0
-        kpi_results['Max Queue Time']['Special CallBack Queue'] = 0
-        kpi_results['Max Queue Time']['Normal CallBack Queue'] = 0
-
-        # Area under queue time curve
-        kpi_results['Average Queue Time'] = {}
-        kpi_results['Average Queue Time']['Special Queue'] = 0
-        kpi_results['Average Queue Time']['Normal Queue'] = 0
-        kpi_results['Average Queue Time']['Special Technical Queue'] = 0
-        kpi_results['Average Queue Time']['Normal Technical Queue'] = 0
-        kpi_results['Average Queue Time']['Special CallBack Queue'] = 0
-        kpi_results['Average Queue Time']['Normal CallBack Queue'] = 0
-
-        for i in data['Users'].keys():  # for each user:
-            if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):  # Which he/she served in the system
-                if data['Users'][i][7] == "Amateur":  # If the user is amateur ...
-                    cumulative["Amateur"] += data['Users'][i][2] - data['Users'][i][1]
-
-                else:
-                    cumulative["Expert"] += data['Users'][i][2] - data['Users'][i][1]
-
-                if data['Users'][i][5] == "Special":  # If the user is special ...
-                    if data['Users'][i][6] is None:
-                        kpi_results['Average Queue Time']['Special Queue'] += data['Users'][i][1] - data['Users'][i][0]
-                        kpi_results['Numbers']['Special Queue'] += 1
-                        kpi_results['Max Queue Time']['Special Queue'] = \
-                                            max(kpi_results['Max Queue Time']['Special Queue'], (data['Users'][i][1] - data['Users'][i][0]))
-
-                    elif data['Users'][i][6] == 'it_is_CallBack':
-                        kpi_results['Average Queue Time']['Special CallBack Queue'] += data['Users'][i][1] - \
-                                                                                              data['Users'][i][0]
-                        kpi_results['Numbers']['Special CallBack Queue'] += 1
-                        kpi_results['Max Queue Time']['Special CallBack Queue'] = \
-                                                max(kpi_results['Max Queue Time']['Special CallBack Queue'], (data['Users'][i][1] - data['Users'][i][0]))
-
-                    if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
-                        kpi_results['Numbers']['Special Technical Queue'] += 1
-                        kpi_results['Average Queue Time']['Special Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
-                        kpi_results['Max Queue Time']['Special Technical Queue'] = \
-                                                max(kpi_results['Max Queue Time']['Special Technical Queue'], (data['Users'][i][3] - data['Users'][i][2]))
-                        cumulative["Technical"] += data['Users'][i][4] - data['Users'][i][3]
-
-                if data['Users'][i][5] == "Normal":
-                    if data['Users'][i][6] is None:
-                        kpi_results['Average Queue Time']['Normal Queue'] += data['Users'][i][1] - data['Users'][i][0]
-                        kpi_results['Numbers']['Normal Queue'] += 1
-                        kpi_results['Max Queue Time']['Normal Queue'] = \
-                                                max(kpi_results['Max Queue Time']['Normal Queue'], (data['Users'][i][1] - data['Users'][i][0]))
-
-                    elif data['Users'][i][6] == 'it_is_CallBack':
-                        kpi_results['Average Queue Time']['Normal CallBack Queue'] += data['Users'][i][1] - data['Users'][i][0]
-                        kpi_results['Numbers']['Normal CallBack Queue'] += 1
-                        kpi_results['Max Queue Time']['Normal CallBack Queue'] = \
-                                                max(kpi_results['Max Queue Time']['Normal CallBack Queue'], (data['Users'][i][1] - data['Users'][i][0]))
-
-                    if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
-                        kpi_results['Numbers']['Normal Technical Queue'] += 1
-                        kpi_results['Average Queue Time']['Normal Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
-                        kpi_results['Max Queue Time']['Normal Technical Queue'] = \
-                                                max(kpi_results['Max Queue Time']['Normal Technical Queue'], (data['Users'][i][3] - data['Users'][i][2]))
-                        cumulative["Technical"] += data['Users'][i][4] - data['Users'][i][3]
-
-        kpi_results['Average Queue Time']['Special Queue'] = kpi_results['Average Queue Time']['Special Queue'] / \
-                                                              kpi_results['Numbers']['Special Queue']
-        kpi_results['Average Queue Time']['Normal Queue'] = kpi_results['Average Queue Time']['Normal Queue'] / \
-                                                            kpi_results['Numbers']['Normal Queue']
-        kpi_results['Average Queue Time']['Special Technical Queue'] = kpi_results['Average Queue Time']['Special Technical Queue'] / \
-                                                                        kpi_results['Numbers']['Special Technical Queue']
-        kpi_results['Average Queue Time']['Normal Technical Queue'] = kpi_results['Average Queue Time']['Normal Technical Queue'] / \
-                                                                      kpi_results['Numbers']['Normal Technical Queue']
-        kpi_results['Average Queue Time']['Special CallBack Queue'] = kpi_results['Average Queue Time']['Special CallBack Queue'] / \
-                                                                      kpi_results['Numbers']['Special CallBack Queue']
-        kpi_results['Average Queue Time']['Normal CallBack Queue'] = kpi_results['Average Queue Time']['Normal CallBack Queue'] / \
-                                                                      kpi_results['Numbers']['Normal CallBack Queue']
-
-        server_number = {"Amateur": self.param_number_of_amateur_server, "Expert": 2, "Technical": 2}
-        kpi_results['Special Users time in system duration'] = 0
-        kpi_results['number of Special Users in system with no waiting'] = 0
-
-        for i in data['Users'].keys():
-            if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
-                if (data['Users'][i][5] == "Special") and (data['Users'][i][6] is None):
-                    if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
-                        kpi_results['Special Users time in system duration'] += data['Users'][i][2] - data['Users'][i][0]
-
-                        if (data['Users'][i][1] - data['Users'][i][0]) == 0:
-                            kpi_results['number of Special Users in system with no waiting'] += 1
-
-                    elif (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
-                        kpi_results['Special Users time in system duration'] += data['Users'][i][4] - data['Users'][i][0]
-
-                        if (data['Users'][i][3] - data['Users'][i][2] == 0) and (
-                                data['Users'][i][1] - data['Users'][i][0] == 0):
-                            kpi_results['number of Special Users in system with no waiting'] += 1
-
-        kpi_results['Special Users time in system duration'] = kpi_results['Special Users time in system duration'] / \
-                        (kpi_results['Numbers']['Special Queue'])
-        kpi_results['number of Special Users in system with no waiting'] = kpi_results['number of Special Users in system with no waiting'] / \
-                        (kpi_results['Numbers']['Special Queue'])
-        kpi_results['Average Queue Length'] = {}
-
-        for i in data['Cumulative Stats']['Area Under Queue Length Curve'].keys():
-            kpi_results['Average Queue Length'][i] = data['Cumulative Stats']['Area Under Queue Length Curve'][i] / self.simulation_time
-        kpi_results['Max Queue Length'] = {}
-
-        for i in data['Maximum Queue Length'].keys():
-            kpi_results['Max Queue Length'][i] = data['Maximum Queue Length'][i]
-        kpi_results['Server Utilization'] = {}
-
-        for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
-            kpi_results['Server Utilization'][i] = cumulative[i] / (self.simulation_time * server_number[i])
-
-        return kpi_results
-
-
-
     def trace_excel_maker(self):
         """
         This function is only meant to create a trace excel
@@ -811,84 +655,6 @@ class CallCenterSimulation:
 
 
 
-    def calculate_kpi_estimation(self, inter_arrival_param={1: 3, 2: 1, 3: 2}, replication=5, alpha=0.05, kpi_category=None, kpi=None) -> dict:
-        """
-        Parameters
-        ----------
-        replication : int
-            Number of independent replication.
-        alpha : TYPE, optional
-            Type one error. The default is 0.05.
-
-        Returns
-        -------
-        kpi_result_estimation : dict
-            A dictionary that contains all KPI estimations. Each KPI has a list of 3
-            numbers in this dictionary; first one is KPI's mean value, second and third
-            one are KPI lower and upper bound respectively
-        """
-
-        def data_structure():
-            return {'Average Queue Length': {'Normal Queue': [],
-                                                        'Special Queue': [],
-                                                        'Normal CallBack Queue': [],
-                                                        'Special CallBack Queue': [],
-                                                        'Normal Technical Queue': [],
-                                                        'Special Technical Queue': []},
-                                'Max Queue Length': {'Normal Queue': [],
-                                                    'Special Queue': [],
-                                                    'Normal CallBack Queue': [],
-                                                    'Special CallBack Queue': [],
-                                                    'Normal Technical Queue': [],
-                                                    'Special Technical Queue': []},
-                                'Average Queue Time': {'Normal Queue': [],
-                                                      'Special Queue': [],
-                                                      'Normal CallBack Queue': [],
-                                                      'Special CallBack Queue': [],
-                                                      'Normal Technical Queue': [],
-                                                      'Special Technical Queue': []},
-                                'Max Queue Time': {'Normal Queue': [],
-                                                  'Special Queue': [],
-                                                  'Normal CallBack Queue': [],
-                                                  'Special CallBack Queue': [],
-                                                  'Normal Technical Queue': [],
-                                                  'Special Technical Queue': []},
-                                'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
-                                'Special Users time in system duration': [],
-                                'Number of Special users in system with no waiting': []}
-        kpi_result_data = data_structure()
-        kpi_result_estimation = data_structure()
-        kpi_output_data = None
-
-        for r in range(replication):
-            kpi_result = self.calculate_kpi(inter_arrival_param=inter_arrival_param)
-
-            for i in kpi_result_data.keys():
-                if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
-                    for j in kpi_result_data[i]:
-                        kpi_result_data[i][j].append(kpi_result[i][j])
-
-                else:
-                    kpi_result_data[i].append(kpi_result[i])
-
-        for i in kpi_result_data.keys():
-            if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
-                for j in kpi_result_data[i]:
-                    kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]))
-                    kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) - np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
-                    kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) + np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
-
-            else:
-                kpi_result_estimation[i].append(np.mean(kpi_result_data[i]))
-                kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) - np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
-                kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) + np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
-
-        if kpi_result_data is not None and kpi is not None:
-            kpi_output_data = kpi_result_data[kpi_category][kpi]
-
-        return kpi_result_estimation, kpi_output_data
-
-
     @staticmethod
     def plotting(x, y, x_label="inter_arrival_param", title ='Normal Queue'):
         plt.figure(figsize=(3, 2))
@@ -897,7 +663,7 @@ class CallCenterSimulation:
         p = np.poly1d(z)
         plt.plot(x, p(x), '--')
         plt.title(title, size=14)
-        error = [np.std(y) for i in range(len(x))]
+        error = [np.std(y) for _ in range(len(x))]
         z1 = np.polyfit(x, error, 8)
         p1 = np.poly1d(z1)
         plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
@@ -909,9 +675,7 @@ class CallCenterSimulation:
     def warm_up(self, simulation_time=30*24*60):
         # Initialize parameters
         num_of_replications = 2
-        num_of_days = 25
         frame_length = 300
-        window_size = 9
 
         # Set up a data structure to save required outputs in each replication
         finishing_customers_frame_count = dict()  # keys are replications
@@ -936,52 +700,48 @@ class CallCenterSimulation:
                 if (customers_data[customer][2] != -1) and (customers_data[customer][1] != -1) and (customers_data[customer][1] != "Exit"):  # Which he/she served in the system
                     if customers_data[customer][5] == "Normal":
                         if customers_data[customer][6] is None:
-                            if start_time < customers_data[customer][2] <= end_time: #Time Service Ends: 2
+                            if start_time < customers_data[customer][2] <= end_time:  # Time Service Ends: 2
                                 number_of_finishing_customers += 1
                             elif customers_data[customer][2] > end_time:
                                 break
 
             return number_of_finishing_customers
 
-        def calculate_aggregate_queue_waiting_time(start_time, end_time, customers_data):
+        def calculate_aggregate_queue_waiting_time(start_time, end_time, users_data):
 
             cumulative_waiting_time = 0
 
-            for customer in customers_data:
-                if (customers_data[customer][2] != -1) and (customers_data[customer][1] != -1) and (customers_data[customer][1] != "Exit"):  # Which he/she served in the system
-                    if customers_data[customer][5] == "Normal":
-                        if customers_data[customer][6] is None:
-                            # if the customer has arrived in this time-frame ...
-                            if start_time <= customers_data[customer][0] < end_time: #'Arrival Time': 0
-                                # if the customer starts getting service in this time-frame...
+            for user in users_data:
+                if (users_data[user][2] != -1) and (users_data[user][1] != -1) and (users_data[user][1] != "Exit"):  # Which he/she served in the system
+                    if users_data[user][5] == "Normal":
+                        if users_data[user][6] is None:
+                            # if the user has arrived in this time-frame ...
+                            if start_time <= users_data[user][0] < end_time:  # Arrival Time: 0
+                                # if the user starts getting service in this time-frame...
 
-                                if customers_data[customer][1] < end_time: # 'Time Service Begins': 1
-                                    cumulative_waiting_time += customers_data[customer][1] - \
-                                                               customers_data[customer][0]
-                                # else if the customer will start getting service after this time-frame...
+                                if users_data[user][1] < end_time:  # Time Service Begins: 1
+                                    cumulative_waiting_time += users_data[user][1] - \
+                                                               users_data[user][0]
+                                # else if the user will start getting service after this time-frame...
                                 else:
                                     cumulative_waiting_time += end_time - \
-                                                               customers_data[customer][0]
-                            # if the customer has arrived before the beginning of this time-frame
+                                                               users_data[user][0]
+                            # if the user has arrived before the beginning of this time-frame
                             # but starts getting service during this time-frame...
-                            elif start_time < customers_data[customer][1] < end_time:
-                                cumulative_waiting_time += customers_data[customer][1] - \
+                            elif start_time < users_data[user][1] < end_time:
+                                cumulative_waiting_time += users_data[user][1] - \
                                                            start_time
                             # There might be another (very rare) corner case. What is it? Handle it if you want.
-                            elif customers_data[customer][0] > end_time:
+                            elif users_data[user][0] > end_time:
                                 break
 
             return cumulative_waiting_time
 
-
-        simulation_time = num_of_days * 1440 #%%%%%%%%%%%%%%%%%
         # Just use the frames with full information (drop last 2 frames)
         num_of_frames = simulation_time // frame_length - 2
         x = [i for i in range(1, num_of_frames + 1)]
 
         for replication in range(1, num_of_replications + 1):
-
-            self.setter( )
             simulation_data = self.simulation()[0]
             customers_data = simulation_data['Users']
             finishing_customers_frame_count[replication] = []
@@ -995,9 +755,6 @@ class CallCenterSimulation:
                 waiting_time_frame_aggregate[replication].append(
                     calculate_aggregate_queue_waiting_time(time, time + frame_length, customers_data))
 
-        self.finishing_customers_replication_average = []
-        self.waiting_time_replication_average = []
-
         for i in range(num_of_frames):
             average_finishing_customers = 0
             average_waiting_time = 0
@@ -1009,114 +766,256 @@ class CallCenterSimulation:
             self.finishing_customers_replication_average.append(average_finishing_customers)
             self.waiting_time_replication_average.append(average_waiting_time)
 
-        # we are replaced moving average with reggresion equation
-        finishing_customers_moving_replication_average = moving_average(self.finishing_customers_replication_average, window_size)
-        waiting_time_moving_replication_average = moving_average(self.waiting_time_replication_average, window_size)
-
         self.plotting(x, self.waiting_time_replication_average, x_label ="Frame(No)", title ='waiting_time_average')
         self.plotting(x, self.finishing_customers_replication_average, x_label ="Frame(No)", title ='finishing_customers_average')
 
 
 
-def sensitivity_analysis(system_config=None):
-    print("please enter one of this keyword for sensitivity analysis")
-    print("percent_need_technical or service_time_technical or service_time_param or inter_arrival_param ")
-    Sensitivity_Variable = str(input("your choose: "))
-    inter_arrival_param, service_time_param = {}, {}
+def calculate_kpi(system_config) -> dict:
+    """
+    This function is meant to calculate all KPIs that described in project's report, then it stored them all
+    in a dictionary called kpi_results
+    return: kpi_results
+    """
+    data, state, trace_list = system_config.simulation()
+    cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
+
+    kpi_results = dict()
+
+    # In order to find number of peolpe in each queue
+    kpi_results['Numbers'] = {}
+    kpi_results['Numbers']['Special Queue'] = 0
+    kpi_results['Numbers']['Normal Queue'] = 0
+    kpi_results['Numbers']['Special Technical Queue'] = 0
+    kpi_results['Numbers']['Normal Technical Queue'] = 0
+    kpi_results['Numbers']['Special CallBack Queue'] = 0
+    kpi_results['Numbers']['Normal CallBack Queue'] = 0
+
+    # Maximum number of people in each queue
+    kpi_results['Max Queue Time'] = {}
+    kpi_results['Max Queue Time']['Special Technical Queue'] = 0
+    kpi_results['Max Queue Time']['Special Queue'] = 0
+    kpi_results['Max Queue Time']['Normal Technical Queue'] = 0
+    kpi_results['Max Queue Time']['Normal Queue'] = 0
+    kpi_results['Max Queue Time']['Special CallBack Queue'] = 0
+    kpi_results['Max Queue Time']['Normal CallBack Queue'] = 0
+
+    # Area under queue time curve
+    kpi_results['Average Queue Time'] = {}
+    kpi_results['Average Queue Time']['Special Queue'] = 0
+    kpi_results['Average Queue Time']['Normal Queue'] = 0
+    kpi_results['Average Queue Time']['Special Technical Queue'] = 0
+    kpi_results['Average Queue Time']['Normal Technical Queue'] = 0
+    kpi_results['Average Queue Time']['Special CallBack Queue'] = 0
+    kpi_results['Average Queue Time']['Normal CallBack Queue'] = 0
+
+    for i in data['Users'].keys():  # for each user:
+        if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):  # Which he/she served in the system
+            if data['Users'][i][7] == "Amateur":  # If the user is amateur ...
+                cumulative["Amateur"] += data['Users'][i][2] - data['Users'][i][1]
+
+            else:
+                cumulative["Expert"] += data['Users'][i][2] - data['Users'][i][1]
+
+            if data['Users'][i][5] == "Special":  # If the user is special ...
+                if data['Users'][i][6] is None:
+                    kpi_results['Average Queue Time']['Special Queue'] += data['Users'][i][1] - data['Users'][i][0]
+                    kpi_results['Numbers']['Special Queue'] += 1
+                    kpi_results['Max Queue Time']['Special Queue'] = \
+                                        max(kpi_results['Max Queue Time']['Special Queue'], (data['Users'][i][1] - data['Users'][i][0]))
+
+                elif data['Users'][i][6] == 'it_is_CallBack':
+                    kpi_results['Average Queue Time']['Special CallBack Queue'] += data['Users'][i][1] - \
+                                                                                          data['Users'][i][0]
+                    kpi_results['Numbers']['Special CallBack Queue'] += 1
+                    kpi_results['Max Queue Time']['Special CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special CallBack Queue'], (data['Users'][i][1] - data['Users'][i][0]))
+
+                if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
+                    kpi_results['Numbers']['Special Technical Queue'] += 1
+                    kpi_results['Average Queue Time']['Special Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
+                    kpi_results['Max Queue Time']['Special Technical Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Special Technical Queue'], (data['Users'][i][3] - data['Users'][i][2]))
+                    cumulative["Technical"] += data['Users'][i][4] - data['Users'][i][3]
+
+            if data['Users'][i][5] == "Normal":
+                if data['Users'][i][6] is None:
+                    kpi_results['Average Queue Time']['Normal Queue'] += data['Users'][i][1] - data['Users'][i][0]
+                    kpi_results['Numbers']['Normal Queue'] += 1
+                    kpi_results['Max Queue Time']['Normal Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal Queue'], (data['Users'][i][1] - data['Users'][i][0]))
+
+                elif data['Users'][i][6] == 'it_is_CallBack':
+                    kpi_results['Average Queue Time']['Normal CallBack Queue'] += data['Users'][i][1] - data['Users'][i][0]
+                    kpi_results['Numbers']['Normal CallBack Queue'] += 1
+                    kpi_results['Max Queue Time']['Normal CallBack Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal CallBack Queue'], (data['Users'][i][1] - data['Users'][i][0]))
+
+                if (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
+                    kpi_results['Numbers']['Normal Technical Queue'] += 1
+                    kpi_results['Average Queue Time']['Normal Technical Queue'] += data['Users'][i][3] - data['Users'][i][2]
+                    kpi_results['Max Queue Time']['Normal Technical Queue'] = \
+                                            max(kpi_results['Max Queue Time']['Normal Technical Queue'], (data['Users'][i][3] - data['Users'][i][2]))
+                    cumulative["Technical"] += data['Users'][i][4] - data['Users'][i][3]
+
+    kpi_results['Average Queue Time']['Special Queue'] = kpi_results['Average Queue Time']['Special Queue'] / \
+                                                          (kpi_results['Numbers']['Special Queue'] + 1)
+    kpi_results['Average Queue Time']['Normal Queue'] = kpi_results['Average Queue Time']['Normal Queue'] / \
+                                                        (kpi_results['Numbers']['Normal Queue'] + 1)
+    kpi_results['Average Queue Time']['Special Technical Queue'] = kpi_results['Average Queue Time']['Special Technical Queue'] / \
+                                                                    (kpi_results['Numbers']['Special Technical Queue'] + 1)
+    kpi_results['Average Queue Time']['Normal Technical Queue'] = kpi_results['Average Queue Time']['Normal Technical Queue'] / \
+                                                                  (kpi_results['Numbers']['Normal Technical Queue'] + 1)
+    kpi_results['Average Queue Time']['Special CallBack Queue'] = kpi_results['Average Queue Time']['Special CallBack Queue'] / \
+                                                                  (kpi_results['Numbers']['Special CallBack Queue'] + 1)
+    kpi_results['Average Queue Time']['Normal CallBack Queue'] = kpi_results['Average Queue Time']['Normal CallBack Queue'] / \
+                                                                  (kpi_results['Numbers']['Normal CallBack Queue'] + 1)
+
+    server_number = {"Amateur": system_config.param_number_of_amateur_server, "Expert": 2, "Technical": 2}
+    kpi_results['Special Users time in system duration'] = 0
+    kpi_results['number of Special Users in system with no waiting'] = 0
+
+    for i in data['Users'].keys():
+        if (data['Users'][i][2] != -1) and (data['Users'][i][1] != -1) and (data['Users'][i][1] != "Exit"):
+            if (data['Users'][i][5] == "Special") and (data['Users'][i][6] is None):
+                if (data['Users'][i][3] is None) and (data['Users'][i][4] is None):
+                    kpi_results['Special Users time in system duration'] += data['Users'][i][2] - data['Users'][i][0]
+
+                    if (data['Users'][i][1] - data['Users'][i][0]) == 0:
+                        kpi_results['number of Special Users in system with no waiting'] += 1
+
+                elif (data['Users'][i][3] is not None) and (data['Users'][i][4] is not None):
+                    kpi_results['Special Users time in system duration'] += data['Users'][i][4] - data['Users'][i][0]
+
+                    if (data['Users'][i][3] - data['Users'][i][2] == 0) and (
+                            data['Users'][i][1] - data['Users'][i][0] == 0):
+                        kpi_results['number of Special Users in system with no waiting'] += 1
+
+    kpi_results['Special Users time in system duration'] = kpi_results['Special Users time in system duration'] / \
+                    ((kpi_results['Numbers']['Special Queue']) + 1)
+    kpi_results['number of Special Users in system with no waiting'] = kpi_results['number of Special Users in system with no waiting'] / \
+                    ((kpi_results['Numbers']['Special Queue']) + 1)
+    kpi_results['Average Queue Length'] = {}
+
+    for i in data['Cumulative Stats']['Area Under Queue Length Curve'].keys():
+        kpi_results['Average Queue Length'][i] = data['Cumulative Stats']['Area Under Queue Length Curve'][i] / system_config.simulation_time
+    kpi_results['Max Queue Length'] = {}
+
+    for i in data['Maximum Queue Length'].keys():
+        kpi_results['Max Queue Length'][i] = data['Maximum Queue Length'][i]
+    kpi_results['Server Utilization'] = {}
+
+    for i in data['Cumulative Stats']['Area Under Server Busy time'].keys():
+        kpi_results['Server Utilization'][i] = cumulative[i] / (system_config.simulation_time * server_number[i])
+
+    return kpi_results
 
 
-    if Sensitivity_Variable == 'inter_arrival_param':
-        x, y1, y2, y3 = [], [], [], []
 
-        for j in range(0, 10):
-            for i in range(3):
-                inter_arrival_param[i] = j * 0.4
+def calculate_kpi_estimation(system_config, replication=25, alpha=0.05, kpi_category=None, kpi=None) -> dict:
+    """
+    Parameters
+    ----------
+    replication : int
+        Number of independent replication.
+    alpha : TYPE, optional
+        Type one error. The default is 0.05.
 
-            system_config = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4,
-                                            inter_arrival_param=inter_arrival_param, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
-                                            service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15,
-                                            simulation_time=30*24*60)
-            kpi_result_estimation = system_config.calculate_kpi_estimation()[0]
+    Returns
+    -------
+    kpi_result_estimation : dict
+        A dictionary that contains all KPI estimations. Each KPI has a list of 3
+        numbers in this dictionary; first one is KPI's mean value, second and third
+        one are KPI lower and upper bound respectively
+    """
 
-            x.append(j * 0.4)
-            y1.append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
-            y2.append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
-            y3.append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
+    def data_structure():
+        return {'Average Queue Length': {'Normal Queue': [],
+                                                    'Special Queue': [],
+                                                    'Normal CallBack Queue': [],
+                                                    'Special CallBack Queue': [],
+                                                    'Normal Technical Queue': [],
+                                                    'Special Technical Queue': []},
+                            'Max Queue Length': {'Normal Queue': [],
+                                                'Special Queue': [],
+                                                'Normal CallBack Queue': [],
+                                                'Special CallBack Queue': [],
+                                                'Normal Technical Queue': [],
+                                                'Special Technical Queue': []},
+                            'Average Queue Time': {'Normal Queue': [],
+                                                  'Special Queue': [],
+                                                  'Normal CallBack Queue': [],
+                                                  'Special CallBack Queue': [],
+                                                  'Normal Technical Queue': [],
+                                                  'Special Technical Queue': []},
+                            'Max Queue Time': {'Normal Queue': [],
+                                              'Special Queue': [],
+                                              'Normal CallBack Queue': [],
+                                              'Special CallBack Queue': [],
+                                              'Normal Technical Queue': [],
+                                              'Special Technical Queue': []},
+                            'Server Utilization': {'Amateur': [], 'Expert': [], 'Technical': []},
+                            'Special Users time in system duration': [],
+                            'Number of Special users in system with no waiting': []}
+    kpi_result_data = data_structure()
+    kpi_result_estimation = data_structure()
+    kpi_output_data = None
 
-        system_config.plotting(x, y1, 'inter_arrival_param ', 'Normal Queue')
-        system_config.plotting(x, y2, 'inter_arrival_param ', 'Normal Technical Queue')
-        system_config.plotting(x, y3, 'inter_arrival_param ', 'Special Queue')
+    for r in range(replication):
+        kpi_result = calculate_kpi(system_config=system_config)
 
-    elif Sensitivity_Variable == 'service_time_param':
-        x, y1, y2, y3 = {1: [], 2: []}, {1: [], 2: []}, {1: [], 2: []}, {1: [], 2: []}
-        temp_string = {1:'Amateur_service_parameter',2:'special_service_parameter'}
-        for i in range(1, 3):
+        for i in kpi_result_data.keys():
+            if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+                for j in kpi_result_data[i]:
+                    kpi_result_data[i][j].append(kpi_result[i][j])
+            else:
+                kpi_result_data[i].append(kpi_result[i])
 
-            for j in range(0, 10):
-                service_time_param[i] = j
-                kpi_result_estimation = system_config.calculate_kpi_estimation()[0]
-                x[i].append(j)
-                y1[i].append(kpi_result_estimation['Average Queue Length']['Normal Queue'][0])
-                y3[i].append(kpi_result_estimation['Average Queue Time']['Special Queue'][0])
-            system_config.plotting(x[i], y1[i], temp_string[i], 'Normal Queue')
-            system_config.plotting(x[i], y3[i], temp_string[i], 'Special Queue')
+    for i in kpi_result_data.keys():
+        if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
+            for j in kpi_result_data[i]:
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]))
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) - np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+                kpi_result_estimation[i][j].append(np.mean(kpi_result_data[i][j]) + np.std(kpi_result_data[i][j]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
 
-    elif Sensitivity_Variable == 'service_time_technical':
-        x, y1, y2 = [], [], []
-        for j in range(0, 15):
-            service_time_technical = j
-            kpi_result_estimation = system_config.calculate_kpi_estimation()[0]
-            x.append(j)
-            y1.append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
-            y2.append(kpi_result_estimation['Average Queue Length']['Special Technical Queue'][0])
-        system_config.plotting(x, y1, 'service_time_technical', 'Normal Technical Queue')
-        system_config.plotting(x, y2, 'service_time_technical', 'Special Technical Queue')
+        else:
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]))
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) - np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
+            kpi_result_estimation[i].append(np.mean(kpi_result_data[i]) + np.std(kpi_result_data[i]) / replication * stats.t.ppf(1 - alpha / 2, replication - 1))
 
-    elif Sensitivity_Variable == 'percent_need_technical':
-        x, y1, y2 = [], [], []
-        for j in range(0, 7):
-            percent_need_technical = j / 15
-            kpi_result_estimation = system_config.calculate_kpi_estimation()[0]
-            x.append(j/15)
-            y1.append(kpi_result_estimation['Average Queue Length']['Normal Technical Queue'][0])
-            y2.append(kpi_result_estimation['Average Queue Length']['Special Technical Queue'][0])
-        system_config.plotting(x, y1, 'service_time_technical', 'Normal Technical Queue')
-        system_config.plotting(x, y2, 'service_time_technical', 'Special Technical Queue')
+    if kpi_result_data is not None and kpi is not None:
+        kpi_output_data = kpi_result_data[kpi_category][kpi]
+
+    return kpi_result_estimation, kpi_output_data
 
 
 
 def kpi_statistical_test(configuration_I, configuration_II, kpi, kpi_category=None, alpha=0.05):
     p_value = 0
-    X = configuration_I.calculate_kpi_estimation(kpi_category=kpi_category, kpi=kpi)[1]
-    Y = configuration_II.calculate_kpi_estimation(kpi_category=kpi_category, kpi=kpi)[1]
+    X = calculate_kpi_estimation(system_config=configuration_I, kpi_category=kpi_category, kpi=kpi)[1]
+    Y = calculate_kpi_estimation(system_config=configuration_II, kpi_category=kpi_category, kpi=kpi)[1]
 
     if stats.normaltest(X)[1] > alpha and stats.normaltest(Y)[1] > alpha:
         p_value = stats.ttest_ind(Y, X, alternative="less")[1]
     else:
-        p_value = stats.kruskal(Y, X, alternative="less")[1]
+        p_value = stats.kruskal(Y, X)[1]
 
     if p_value > alpha:
-        print("First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi))
+        return "First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi)
     else:
-        print("Second system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi))
-    return p_value
+        return "Second system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi)
 
 
+# -------------------------------------------------------------------------------------------------------------------------------
 
-System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4,
-                                inter_arrival_param={1: 11, 2: 11, 3: 11}, disruption_inter_arrival_param={1: 11, 2: 11, 3: 11},
-                                service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15,
-                                simulation_time=30*24*60)
-
-# System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4,
-#                                 inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
-#                                 service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15,
-#                                 simulation_time=30*24*60)
+System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
 
 
-a = System_I.calculate_kpi_estimation(inter_arrival_param={1: 11, 2: 11, 3: 11}, kpi_category='Average Queue Time', kpi='Normal Queue')[0]
-# b = System_II.calculate_kpi_estimation(kpi_category='Average Queue Time', kpi='Normal Queue')[1]
+System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15)
 
-# p_value = kpi_statistical_test(System_I, System_II, kpi_category='Average Queue Time', kpi='Normal Queue')
 
-# sensitivity_analysis()
+kpi_statistical_test(System_I, System_II, kpi_category='Average Queue Time', kpi='Normal Queue')
