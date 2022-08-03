@@ -656,19 +656,33 @@ class CallCenterSimulation:
 
 
     @staticmethod
-    def plotting(x, y, x_label="inter_arrival_param", title ='Normal Queue'):
-        plt.figure(figsize=(3, 2))
-        plt.plot(x, y, alpha=0.4)
-        z = np.polyfit(x, y, 4)
-        p = np.poly1d(z)
-        plt.plot(x, p(x), '--')
-        plt.title(title, size=14)
-        error = [np.std(y) for _ in range(len(x))]
-        z1 = np.polyfit(x, error, 8)
-        p1 = np.poly1d(z1)
-        plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
-        plt.xlabel(x_label)
-        plt.show()
+    def plotting(x, y,waiting_time_moving_replication_average = None, x_label="inter_arrival_param", title ='Normal Queue'):
+        if waiting_time_moving_replication_average is not None :
+            plt.figure(figsize=(10, 7))
+            plt.plot(x, y, alpha=0.4)     
+            plt.plot(x, waiting_time_moving_replication_average, '--')
+            plt.title(title, size=14)
+            error = [np.std(y) for _ in range(len(x))]
+            z = np.polyfit(x, y, 4)
+            p = np.poly1d(z)
+            z1 = np.polyfit(x, error, 8)
+            p1 = np.poly1d(z1)
+            plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
+            plt.xlabel(x_label)
+            plt.show()
+        else:
+            plt.figure(figsize=(3, 2))
+            plt.plot(x, y, alpha=0.4)
+            z = np.polyfit(x, y, 4)
+            p = np.poly1d(z)
+            plt.plot(x, p(x), '--')
+            plt.title(title, size=14)
+            error = [np.std(y) for _ in range(len(x))]
+            z1 = np.polyfit(x, error, 8)
+            p1 = np.poly1d(z1)
+            plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
+            plt.xlabel(x_label)
+            plt.show()
 
 
 
@@ -676,6 +690,8 @@ class CallCenterSimulation:
         # Initialize parameters
         num_of_replications = 2
         frame_length = 300
+        window_size = 9
+        num_of_days = 25
 
         # Set up a data structure to save required outputs in each replication
         finishing_customers_frame_count = dict()  # keys are replications
@@ -737,8 +753,8 @@ class CallCenterSimulation:
 
             return cumulative_waiting_time
 
-        # Just use the frames with full information (drop last 2 frames)
-        num_of_frames = simulation_time // frame_length - 2
+        # Just use the frames with full information (drop last 6 frames)
+        num_of_frames = simulation_time // frame_length - 6  ####################
         x = [i for i in range(1, num_of_frames + 1)]
 
         for replication in range(1, num_of_replications + 1):
@@ -765,9 +781,13 @@ class CallCenterSimulation:
 
             self.finishing_customers_replication_average.append(average_finishing_customers)
             self.waiting_time_replication_average.append(average_waiting_time)
-
-        self.plotting(x, self.waiting_time_replication_average, x_label ="Frame(No)", title ='waiting_time_average')
-        self.plotting(x, self.finishing_customers_replication_average, x_label ="Frame(No)", title ='finishing_customers_average')
+        
+        # we are replaced moving average with reggresion equation
+        finishing_customers_moving_replication_average = moving_average(self.finishing_customers_replication_average, window_size)
+        waiting_time_moving_replication_average = moving_average(self.waiting_time_replication_average, window_size)
+        
+        self.plotting(x, self.waiting_time_replication_average, waiting_time_moving_replication_average, x_label ="Frame(No)", title ='waiting_time_average')
+        self.plotting(x, self.finishing_customers_replication_average, finishing_customers_moving_replication_average, x_label ="Frame(No)", title ='finishing_customers_average')
 
 
 
@@ -912,7 +932,7 @@ def calculate_kpi(system_config) -> dict:
 
 
 
-def calculate_kpi_estimation(system_config, replication=25, alpha=0.05, kpi_category=None, kpi=None) -> dict:
+def calculate_kpi_estimation(System_config="II", replication=25, alpha=0.05, kpi_category=None, kpi=None) -> dict:
     """
     Parameters
     ----------
@@ -962,7 +982,20 @@ def calculate_kpi_estimation(system_config, replication=25, alpha=0.05, kpi_cate
     kpi_output_data = None
 
     for r in range(replication):
-        kpi_result = calculate_kpi(system_config=system_config)
+        System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+                                        inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                        service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
+        
+        
+        System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+                                        inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+                                        service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15)
+        
+        if System_config == "I":
+        
+            kpi_result = calculate_kpi(system_config=System_I)
+        elif System_config == "II":
+            kpi_result = calculate_kpi(system_config=System_II)
 
         for i in kpi_result_data.keys():
             if (kpi_result_data[i] != 'Special Users time in system duration') and (kpi_result_data[i] != 'Number of Special users in system with no waiting'):
@@ -1007,15 +1040,21 @@ def kpi_statistical_test(configuration_I, configuration_II, kpi, kpi_category=No
 
 
 # -------------------------------------------------------------------------------------------------------------------------------
-
+#System_phase_II = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0.5, param_special_proportion=0.3, simulation_time=30*24*60,
+#                                inter_arrival_param={1: 3, 2: 1, 3: 2}, disruption_inter_arrival_param={1: 2, 2: 0.5, 3: 1},
+#                                service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
+#
+#
 System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
                                 inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
                                 service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
 
 
-System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
-                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
-                                service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15)
+#System_II = CallCenterSimulation(param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+#                                inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+#                                service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15)
 
 
-kpi_statistical_test(System_I, System_II, kpi_category='Average Queue Time', kpi='Normal Queue')
+#kpi_statistical_test(System_I, System_II, kpi_category='Average Queue Time', kpi='Normal Queue')
+#a = calculate_kpi_estimation()
+System_I.warm_up()
