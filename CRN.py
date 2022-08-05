@@ -584,7 +584,7 @@ class CallCenterSimulation:
 
 
 
-    def simulation(self, trace_creator = False) -> dict:
+    def simulation(self) -> dict:
         """
         This function is meant to do the simulation by help of introduced events.
         param simulation_time: this project is terminating simulation, so this parameter is simulation end time.
@@ -626,173 +626,9 @@ class CallCenterSimulation:
             else:  # if simulation time is passed after simulation end time, so FEL must be cleared
                 self.future_event_list.clear()
 
-            if trace_creator:  # Tihs code block is supposed to create trace for each current event and append it to the trace list
-                trace_data = list(self.state.values())
-                trace_data.insert(0, round(self.clock, 3))
-                trace_data.insert(0, self.current_event)
-                fel_copy = self.sorted_fel.copy()
-
-                while len(fel_copy) > 0:  # Filling trace with events of future event list
-                    trace_data.append(list(filter(None, fel_copy.pop(0).values())))
-                self.trace_list.append(trace_data)
-
         return self.data, self.state, self.trace_list
 
 
-
-    def trace_excel_maker(self):
-        """
-        This function is only meant to create a trace excel
-        """
-        self.simulation(trace_creator=True)
-        trace = pd.DataFrame(self.trace_list)
-
-        columns = list(self.state.keys())  # list of excel columns headers
-        columns.insert(0, 'Clock')
-        columns.insert(1, 'Current Event')
-        columns.extend([f'fel{i}' for i in range(1, trace.shape[1] - 11)])  # to add future event list to trace dataframe
-        trace = pd.DataFrame(self.trace_list, columns=columns)
-        trace.to_excel('C:/Users/Lenovo/Desktop/trace_dataframe.xlsx', engine='xlsxwriter')
-
-
-
-    @staticmethod
-    def plotting(x, y,waiting_time_moving_replication_average = None, x_label="inter_arrival_param", title ='Normal Queue'):
-        if waiting_time_moving_replication_average is not None :
-            plt.figure(figsize=(10, 7))
-            plt.plot(x, y, alpha=0.4)     
-            plt.plot(x, waiting_time_moving_replication_average, '--')
-            plt.title(title, size=14)
-            error = [np.std(y) for _ in range(len(x))]
-            z = np.polyfit(x, y, 4)
-            p = np.poly1d(z)
-            z1 = np.polyfit(x, error, 8)
-            p1 = np.poly1d(z1)
-            plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
-            plt.xlabel(x_label)
-            plt.show()
-        else:
-            plt.figure(figsize=(3, 2))
-            plt.plot(x, y, alpha=0.4)
-            z = np.polyfit(x, y, 4)
-            p = np.poly1d(z)
-            plt.plot(x, p(x), '--')
-            plt.title(title, size=14)
-            error = [np.std(y) for _ in range(len(x))]
-            z1 = np.polyfit(x, error, 8)
-            p1 = np.poly1d(z1)
-            plt.fill_between(x, (p(x)-p1(x)/2), (p(x)+p1(x)/2), alpha=0.2)
-            plt.xlabel(x_label)
-            plt.show()
-
-
-
-    def warm_up(self, simulation_time=30*24*60):
-        # Initialize parameters
-        num_of_replications = 2
-        frame_length = 300
-        window_size = 9
-        num_of_days = 25
-
-        # Set up a data structure to save required outputs in each replication
-        finishing_customers_frame_count = dict()  # keys are replications
-        waiting_time_frame_aggregate = dict()  # keys are replications
-
-        # Function to calculate moving average of a list over a sliding window of length m.
-        def moving_average(input_list, m):
-            output_list = []
-            n = len(input_list)
-            for i in range(n):
-                output_list.append(sum(input_list[max(i - m // 2, 2 * i - n + 1, 0):min(i + m // 2 + 1, 2 * i + 1, n)]) / (
-                        min(i + m // 2, 2 * i, n - 1) - max(i - m // 2, 2 * i - n + 1, 0) + 1))
-            return output_list
-
-        # Function to calculate the number of customers who finish getting service in one time-frame
-        # frame: [start_time, end_time]
-        def calculate_number_of_finishing_customers(start_time, end_time, customers_data):
-
-            number_of_finishing_customers = 0
-
-            for customer in customers_data:
-                if (customers_data[customer][2] != -1) and (customers_data[customer][1] != -1) and (customers_data[customer][1] != "Exit"):  # Which he/she served in the system
-                    if customers_data[customer][5] == "Normal":
-                        if customers_data[customer][6] is None:
-                            if start_time < customers_data[customer][2] <= end_time:  # Time Service Ends: 2
-                                number_of_finishing_customers += 1
-                            elif customers_data[customer][2] > end_time:
-                                break
-
-            return number_of_finishing_customers
-
-        def calculate_aggregate_queue_waiting_time(start_time, end_time, users_data):
-
-            cumulative_waiting_time = 0
-
-            for user in users_data:
-                if (users_data[user][2] != -1) and (users_data[user][1] != -1) and (users_data[user][1] != "Exit"):  # Which he/she served in the system
-                    if users_data[user][5] == "Normal":
-                        if users_data[user][6] is None:
-                            # if the user has arrived in this time-frame ...
-                            if start_time <= users_data[user][0] < end_time:  # Arrival Time: 0
-                                # if the user starts getting service in this time-frame...
-
-                                if users_data[user][1] < end_time:  # Time Service Begins: 1
-                                    cumulative_waiting_time += users_data[user][1] - \
-                                                               users_data[user][0]
-                                # else if the user will start getting service after this time-frame...
-                                else:
-                                    cumulative_waiting_time += end_time - \
-                                                               users_data[user][0]
-                            # if the user has arrived before the beginning of this time-frame
-                            # but starts getting service during this time-frame...
-                            elif start_time < users_data[user][1] < end_time:
-                                cumulative_waiting_time += users_data[user][1] - \
-                                                           start_time
-                            # There might be another (very rare) corner case. What is it? Handle it if you want.
-                            elif users_data[user][0] > end_time:
-                                break
-
-            return cumulative_waiting_time
-
-        # Just use the frames with full information (drop last 6 frames)
-        num_of_frames = simulation_time // frame_length - 6  ####################
-        x = [i for i in range(1, num_of_frames + 1)]
-
-        for replication in range(1, num_of_replications + 1):
-            simulation_data = self.simulation()[0]
-            customers_data = simulation_data['Users']
-            finishing_customers_frame_count[replication] = []
-            waiting_time_frame_aggregate[replication] = []
-
-            # do calculations frame by frame
-            for time in range(0, num_of_frames * frame_length, frame_length):
-                finishing_customers_frame_count[replication].append(
-                    calculate_number_of_finishing_customers(time, time + frame_length, customers_data))
-
-                waiting_time_frame_aggregate[replication].append(
-                    calculate_aggregate_queue_waiting_time(time, time + frame_length, customers_data))
-
-        for i in range(num_of_frames):
-            average_finishing_customers = 0
-            average_waiting_time = 0
-
-            for replication in range(1, num_of_replications + 1):
-                average_finishing_customers += finishing_customers_frame_count[replication][i] * (1 / num_of_replications)
-                average_waiting_time += waiting_time_frame_aggregate[replication][i] * (1 / num_of_replications)
-
-            self.finishing_customers_replication_average.append(average_finishing_customers)
-            self.waiting_time_replication_average.append(average_waiting_time)
-        
-        # we are replaced moving average with reggresion equation
-        finishing_customers_moving_replication_average = moving_average(self.finishing_customers_replication_average, window_size)
-        waiting_time_moving_replication_average = moving_average(self.waiting_time_replication_average, window_size)
-        
-        self.plotting(x, self.waiting_time_replication_average, waiting_time_moving_replication_average, x_label ="Frame(No)", title ='waiting_time_average')
-        self.plotting(x, self.finishing_customers_replication_average, finishing_customers_moving_replication_average, x_label ="Frame(No)", title ='finishing_customers_average')
-
-
-            
-            
 
 def calculate_kpi(system_config) -> dict:
     """
@@ -986,12 +822,12 @@ def calculate_kpi_estimation(random_dict, system_config="II", replication=2, alp
     
     temp_counter = 0
     for r in range(replication):
-        System_I = CallCenterSimulation(random_dict[temp_counter], param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+        System_I = CallCenterSimulation(random_dict[temp_counter], param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=110*24*60,
                                         inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
                                         service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
         
         
-        System_II = CallCenterSimulation(random_dict[0], param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+        System_II = CallCenterSimulation(random_dict[0], param_number_of_amateur_server=2, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=110*24*60,
                                         inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
                                         service_time_param={"Amateur": 5.8, "Expert": 2.7}, technical_service_time_param=10, percent_need_technical=0.15)
         temp_counter += 1
@@ -1023,14 +859,12 @@ def calculate_kpi_estimation(random_dict, system_config="II", replication=2, alp
     if kpi_result_data is not None and kpi is not None:
         kpi_output_data = kpi_result_data[kpi_category][kpi]
 
-    return kpi_result_estimation, kpi_output_data
+    return kpi_result_estimation, kpi_result_data
+  
 
-
-
-
-def kpi_statistical_test(kpi, replication=3, kpi_category=None, alpha=0.05):
+def kpi_statistical_test(kpi=None, replication=3, kpi_category=None, alpha=0.05):
     def CRN(replication):
-        seeds = [random.randint(0,1000) for i in range(10)]
+        seeds = [random.randint(0, 1000) for i in range(10)]
         random_dict_I = {}
         random_dict_II = {}
         for replication_number in range(replication):
@@ -1038,28 +872,38 @@ def kpi_statistical_test(kpi, replication=3, kpi_category=None, alpha=0.05):
             random_dict_II[replication_number] = {}
             for i in range(10):
                 random.seed(seeds[i])
-                random_dict_I[replication_number][i] = [random.random() for i in range(5*30*24*60)]
+                random_dict_I[replication_number][i] = [random.random() for i in range(5*110*24*60)]
                 random.seed(seeds[i])
-                random_dict_II[replication_number][i] = [random.random() for i in range(5*30*24*60)]
+                random_dict_II[replication_number][i] = [random.random() for i in range(5*110*24*60)]
         return random_dict_I,random_dict_II
     random_dict_I,random_dict_II = CRN(replication)
-    
-    X = np.array(calculate_kpi_estimation(random_dict_I, system_config='I', replication=replication, kpi_category=kpi_category, kpi=kpi)[1])
-    Y = np.array(calculate_kpi_estimation(random_dict_II, system_config='II', replication=replication, kpi_category=kpi_category, kpi=kpi)[1])
+    kpi_result_data_X = calculate_kpi_estimation(random_dict_I, system_config='I', replication=replication, kpi_category=kpi_category, kpi=kpi)[1]
+    kpi_result_data_Y = calculate_kpi_estimation(random_dict_II, system_config='II', replication=replication, kpi_category=kpi_category, kpi=kpi)[1]
+    return kpi_result_data_X,kpi_result_data_Y
+kpi_result_data_X,kpi_result_data_Y = kpi_statistical_test(replication=10)
 
-    nu = ((X.std()**2/len(X) + Y.std()**2/len(Y))**2) / ((X.std()**2/len(X))**2/(len(X) - 1) + (Y.std()**2/len(Y))**2/(len(Y) - 1))
-    LB = X.mean() - Y.mean() - stats.t.ppf(q=(1-alpha/2), df=round(nu, 0)) * np.sqrt((X.std()**2)/len(X) + (Y.std()**2)/len(Y))
-    UB = X.mean() - Y.mean() + stats.t.ppf(q=(1-alpha/2), df=round(nu, 0)) * np.sqrt((X.std()**2)/len(X) + (Y.std()**2)/len(Y))
-    
-    CI = 'CI {0}%: [{1}, {2}]'.format(int((1 - alpha)*100), round(LB, 3), round(UB, 3))
-    
-    if (LB < 0) and (UB < 0):
-        return "First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi) + '\n' + CI
-    elif (LB > 0) and (UB > 0):    
-        return "Second system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi) + '\n' + CI
-    else:
-        return "There is no significant difference between first and secend system's configuration in measurement of {0}[{1}]".format(kpi_category, kpi) + '\n' + CI
+while True:
+  kpi_category = str(input())
+  if kpi_category == "break":
+    break
+  kpi = str(input())
 
-# -------------------------------------------------------------------------------------------------------------------------------
+  x,y = kpi_result_data_X[kpi_category][kpi],kpi_result_data_Y[kpi_category][kpi]
+      
+  X = np.array(x)
+  Y = np.array(y)
+  D = X - Y
 
-print(kpi_statistical_test(replication=2, kpi_category='Average Queue Time', kpi='Normal Queue'))
+  PE = D.mean()
+  LB = D.mean() - stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
+  UB = D.mean() + stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
+
+  CI = 'CI {0}%: [{1}, {2}]'.format(int((1 - 0.05)*100), round(LB, 3), round(UB, 3))
+
+  if (LB < 0) and (UB < 0):
+      print( "First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE , '\n' , CI)
+  elif (LB > 0) and (UB > 0):    
+      print( "Second system's configuration is better than the first one in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE + '\n' , CI)
+  else:
+      print( "There is no significant difference between first and secend system's configuration in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE , '\n' , CI)
+  # -------------------------------------------------------------------------------------------------------------------------------
