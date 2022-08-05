@@ -35,22 +35,7 @@ class CallCenterSimulation:
         self.trace_list = []
 
 
-
-    def starting_state(self):
-
-        # State variables declaration
-        self.state['Normal Queue'] = 0
-        self.state['Special Queue'] = 0
-        self.state['Normal CallBack Queue'] = 0
-        self.state['Special CallBack Queue'] = 0
-        self.state['Expert Server Status'] = 0
-        self.state['Amateur Server Status'] = 0
-        self.state['Technical Server Status'] = 0
-        self.state['Special Technical Queue'] = 0
-        self.state['Normal Technical Queue'] = 0
-        self.state['Shift Status'] = 0
-
-        # Data: will save every essential data
+    def data_def(self):
         self.data['Users'] = dict()
         """ 
         Users dictionary is implemented to track each customer's entrance time, service start time, and service end time, 
@@ -151,7 +136,26 @@ class CallCenterSimulation:
         self.data['Cumulative Stats']['Area Under Server Busy time']['Amateur'] = 0
         self.data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = 0
         self.data['Cumulative Stats']['Area Under Server Busy time']['Technical'] = 0
+        
+        
+        
+    def starting_state(self):
 
+        # State variables declaration
+        self.state['Normal Queue'] = 0
+        self.state['Special Queue'] = 0
+        self.state['Normal CallBack Queue'] = 0
+        self.state['Special CallBack Queue'] = 0
+        self.state['Expert Server Status'] = 0
+        self.state['Amateur Server Status'] = 0
+        self.state['Technical Server Status'] = 0
+        self.state['Special Technical Queue'] = 0
+        self.state['Normal Technical Queue'] = 0
+        self.state['Shift Status'] = 0
+
+        # Data: will save every essential data
+        self.data_def()
+        
         # FEL initialization, and Starting events that initialize the simulation
         self.future_event_list.append({'Event Type': 'Shift Start/End', 'Event Time': 0, 'User': ''})
         self.future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0, 'User': ''})
@@ -550,20 +554,22 @@ class CallCenterSimulation:
         """
         This function is supposed to implement queue quit event for users that have potential to do so.
         """
-        if self.data['Users'][self.user[0]][1] == -1:  # if it is !=-1 then mean of he start receiving service before quit of queue
-            if self.user[1] == 'Normal':
-                self.data['Last Queue Length']['Normal Queue'] = self.state['Normal Queue']
-                self.data_queue_calculater('Normal')
-                self.state['Normal Queue'] -= 1
-                self.data_queue_user('Normal', status='Exit')
-
-            else:
-                self.data['Number of special users'] -= 1
-                self.data['Last Queue Length']['Special Queue'] = self.state['Special Queue']
-                self.data_queue_calculater('Special')
-                self.state['Special Queue'] -= 1
-                self.data_queue_user('Special', status='Exit')
-
+        try: # for a rare steedy state, we should using try
+            if self.data['Users'][self.user[0]][1] == -1:  # if it is !=-1 then mean of he start receiving service before quit of queue
+                if self.user[1] == 'Normal':
+                    self.data['Last Queue Length']['Normal Queue'] = self.state['Normal Queue']
+                    self.data_queue_calculater('Normal')
+                    self.state['Normal Queue'] -= 1
+                    self.data_queue_user('Normal', status='Exit')
+    
+                else:
+                    self.data['Number of special users'] -= 1
+                    self.data['Last Queue Length']['Special Queue'] = self.state['Special Queue']
+                    self.data_queue_calculater('Special')
+                    self.state['Special Queue'] -= 1
+                    self.data_queue_user('Special', status='Exit')
+        except:
+            pass
 
 
     def shift_start_end(self):
@@ -580,10 +586,10 @@ class CallCenterSimulation:
             self.state['Shift Status'] = 3  # if none of the above, so we are in third shift
 
         self.fel_maker('Shift Start/End', self.user)
+        
+    
 
-
-
-    def simulation(self, trace_creator = False) -> dict:
+    def simulation(self, trace_creator = False, T0 = 0) -> dict:
         """
         This function is meant to do the simulation by help of introduced events.
         param simulation_time: this project is terminating simulation, so this parameter is simulation end time.
@@ -624,7 +630,7 @@ class CallCenterSimulation:
 
             else:  # if simulation time is passed after simulation end time, so FEL must be cleared
                 self.future_event_list.clear()
-
+            
             if trace_creator:  # Tihs code block is supposed to create trace for each current event and append it to the trace list
                 trace_data = list(self.state.values())
                 trace_data.insert(0, round(self.clock, 3))
@@ -634,7 +640,27 @@ class CallCenterSimulation:
                 while len(fel_copy) > 0:  # Filling trace with events of future event list
                     trace_data.append(list(filter(None, fel_copy.pop(0).values())))
                 self.trace_list.append(trace_data)
+            if (T0 > 0) and ( (T0-9) < self.clock < T0 ):
 
+                temp_queue_user = {}
+                temp_queue = self.data['Queue Users']
+
+                for i in temp_queue.keys():
+                    for j in temp_queue[i]:
+                        temp_queue_user[j] = self.data['Users'][j]
+                        
+                temp_busy_user = {}
+                for i in self.data['Users']:
+                    if (self.data['Users'][i][1] == -1) or (self.data['Users'][i][2] == -1) or ((self.data['Users'][i][3] is not None) and (self.data['Users'][i][4] is None)):
+                        temp_busy_user[i] = self.data['Users'][i]
+                ##    
+                self.data_def()
+                ##
+                self.data['Queue Users'] = temp_queue
+                self.data['Users'] = temp_queue_user 
+                for i in temp_busy_user:
+                    self.data['Users'][i] = temp_busy_user[i]
+                
         return self.data, self.state, self.trace_list
 
 
@@ -692,7 +718,6 @@ def warm_up(simulation_time=30*24*60):
     This function is meant to find cold period of specific kpi
     """
     # Initialize parameters
-    global System_I
     num_of_replications = 50
     frame_length = 100
     window_size = 10
@@ -764,7 +789,7 @@ def warm_up(simulation_time=30*24*60):
     x = [i for i in range(1, num_of_frames + 1)]
 
     for replication in range(1, num_of_replications + 1):
-        System_I: CallCenterSimulation = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+        System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
                                 inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
                                 service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
 
@@ -808,7 +833,7 @@ def calculate_kpi(system_config: object) -> dict:
     in a dictionary called kpi_results
     return: kpi_results
     """
-    data, state, trace_list = system_config.simulation()
+    data, state, trace_list = system_config.simulation(T0 = 10*24*60) ###############################
     cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
 
     kpi_results = dict()
@@ -1053,5 +1078,11 @@ def kpi_statistical_test(kpi: str, replication: int = 25, kpi_category: str = No
 
 # -------------------------------------------------------------------------------------------------------------------------------
 
+a=calculate_kpi_estimation(system_config= "II", replication = 5)[0]
+#kpi_statistical_test(replication=10, kpi_category='Server Utilization', kpi='Expert')
 
-kpi_statistical_test(replication=10, kpi_category='Server Utilization', kpi='Expert')
+#System_I = CallCenterSimulation(param_number_of_amateur_server=3, param_callback_ratio=0, param_special_proportion=0.4, simulation_time=30*24*60,
+#                                        inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1}, disruption_inter_arrival_param={1: 1.1, 2: 1.1, 3: 1.1},
+#                                        service_time_param={"Amateur": 7, "Expert": 3}, technical_service_time_param=10, percent_need_technical=0.15)
+#
+#data = System_I.simulation(T0=10*24*36)[0]

@@ -37,21 +37,7 @@ class CallCenterSimulation:
 
 
 
-    def starting_state(self):
-
-        # State variables declaration
-        self.state['Normal Queue'] = 0
-        self.state['Special Queue'] = 0
-        self.state['Normal CallBack Queue'] = 0
-        self.state['Special CallBack Queue'] = 0
-        self.state['Expert Server Status'] = 0
-        self.state['Amateur Server Status'] = 0
-        self.state['Technical Server Status'] = 0
-        self.state['Special Technical Queue'] = 0
-        self.state['Normal Technical Queue'] = 0
-        self.state['Shift Status'] = 0
-
-        # Data: will save every essential data
+    def data_def(self):
         self.data['Users'] = dict()
         """ 
         Users dictionary is implemented to track each customer's entrance time, service start time, and service end time, 
@@ -152,12 +138,31 @@ class CallCenterSimulation:
         self.data['Cumulative Stats']['Area Under Server Busy time']['Amateur'] = 0
         self.data['Cumulative Stats']['Area Under Server Busy time']['Expert'] = 0
         self.data['Cumulative Stats']['Area Under Server Busy time']['Technical'] = 0
+        
+        
+        
+    def starting_state(self):
 
+        # State variables declaration
+        self.state['Normal Queue'] = 0
+        self.state['Special Queue'] = 0
+        self.state['Normal CallBack Queue'] = 0
+        self.state['Special CallBack Queue'] = 0
+        self.state['Expert Server Status'] = 0
+        self.state['Amateur Server Status'] = 0
+        self.state['Technical Server Status'] = 0
+        self.state['Special Technical Queue'] = 0
+        self.state['Normal Technical Queue'] = 0
+        self.state['Shift Status'] = 0
+
+        # Data: will save every essential data
+        self.data_def()
+        
         # FEL initialization, and Starting events that initialize the simulation
         self.future_event_list.append({'Event Type': 'Shift Start/End', 'Event Time': 0, 'User': ''})
         self.future_event_list.append({'Event Type': 'Month Change', 'Event Time': 0, 'User': ''})
 
-        if self.random_dict[0].pop(0) > self.param_special_proportion:
+        if random.random() > self.param_special_proportion:
             self.future_event_list.append({'Event Type': 'Call Start', 'Event Time': 0, 'User': [1, 'Normal', 'Amateur', 0]})
         else:
             self.future_event_list.append({'Event Type': 'Call Start', 'Event Time': 0, 'User': [1, 'Special', 'Expert', 0]})
@@ -551,20 +556,22 @@ class CallCenterSimulation:
         """
         This function is supposed to implement queue quit event for users that have potential to do so.
         """
-        if self.data['Users'][self.user[0]][1] == -1:  # if it is !=-1 then mean of he start receiving service before quit of queue
-            if self.user[1] == 'Normal':
-                self.data['Last Queue Length']['Normal Queue'] = self.state['Normal Queue']
-                self.data_queue_calculater('Normal')
-                self.state['Normal Queue'] -= 1
-                self.data_queue_user('Normal', status='Exit')
+        try:
+            if self.data['Users'][self.user[0]][1] == -1:  # if it is !=-1 then mean of he start receiving service before quit of queue
+                if self.user[1] == 'Normal':
+                    self.data['Last Queue Length']['Normal Queue'] = self.state['Normal Queue']
+                    self.data_queue_calculater('Normal')
+                    self.state['Normal Queue'] -= 1
+                    self.data_queue_user('Normal', status='Exit')
 
-            else:
-                self.data['Number of special users'] -= 1
-                self.data['Last Queue Length']['Special Queue'] = self.state['Special Queue']
-                self.data_queue_calculater('Special')
-                self.state['Special Queue'] -= 1
-                self.data_queue_user('Special', status='Exit')
-
+                else:
+                    self.data['Number of special users'] -= 1
+                    self.data['Last Queue Length']['Special Queue'] = self.state['Special Queue']
+                    self.data_queue_calculater('Special')
+                    self.state['Special Queue'] -= 1
+                    self.data_queue_user('Special', status='Exit')
+        except:
+            pass
 
 
     def shift_start_end(self):
@@ -584,7 +591,7 @@ class CallCenterSimulation:
 
 
 
-    def simulation(self) -> dict:
+    def simulation(self, T0) -> dict:
         """
         This function is meant to do the simulation by help of introduced events.
         param simulation_time: this project is terminating simulation, so this parameter is simulation end time.
@@ -620,6 +627,26 @@ class CallCenterSimulation:
 
                 elif self.current_event['Event Type'] == 'Shift Start/End':
                     self.shift_start_end()
+            if (T0 > 0) and ( (T0-9) < self.clock < T0 ):
+
+                temp_queue_user = {}
+                temp_queue = self.data['Queue Users']
+
+                for i in temp_queue.keys():
+                    for j in temp_queue[i]:
+                        temp_queue_user[j] = self.data['Users'][j]
+                        
+                temp_busy_user = {}
+                for i in self.data['Users']:
+                    if (self.data['Users'][i][1] == -1) or (self.data['Users'][i][2] == -1) or ((self.data['Users'][i][3] is not None) and (self.data['Users'][i][4] is None)):
+                        temp_busy_user[i] = self.data['Users'][i]
+                ##    
+                self.data_def()
+                ##
+                self.data['Queue Users'] = temp_queue
+                self.data['Users'] = temp_queue_user 
+                for i in temp_busy_user:
+                    self.data['Users'][i] = temp_busy_user[i]
 
                 self.future_event_list.remove(self.current_event)
 
@@ -636,7 +663,7 @@ def calculate_kpi(system_config) -> dict:
     in a dictionary called kpi_results
     return: kpi_results
     """
-    data, state, trace_list = system_config.simulation()
+    data, state, trace_list = system_config.simulation(T0 = 10*24*60)
     cumulative = {"Amateur": 0, "Expert": 0, "Technical": 0}
 
     kpi_results = dict()
