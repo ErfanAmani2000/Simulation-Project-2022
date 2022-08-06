@@ -913,28 +913,28 @@ def kpi_statistical_test(kpi=None, replication=3, kpi_category=None, alpha=0.05)
 kpi_result_data_X,kpi_result_data_Y = kpi_statistical_test(replication=1)
 #
 while True:
-  kpi_category = str(input())
-  if kpi_category == "break":
+    kpi_category = str(input())
+    if kpi_category == "break":
     break
-  kpi = str(input())
+    kpi = str(input())
 
-  x,y = kpi_result_data_X[kpi_category][kpi],kpi_result_data_Y[kpi_category][kpi]
+    x,y = kpi_result_data_X[kpi_category][kpi],kpi_result_data_Y[kpi_category][kpi]
 
-  X = np.array(x)
-  Y = np.array(y)
-  D = X - Y
+    X = np.array(x)
+    Y = np.array(y)
+    D = X - Y
 
-  PE = D.mean()
-  LB = D.mean() - stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
-  UB = D.mean() + stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
+    PE = D.mean()
+    LB = D.mean() - stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
+    UB = D.mean() + stats.t.ppf(q=(1-0.05/2), df=len(D) - 1) * D.std()/np.sqrt(len(D))
 
-  CI = 'CI {0}%: [{1}, {2}]'.format(int((1 - 0.05)*100), round(LB, 3), round(UB, 3))
+    CI = 'CI {0}%: [{1}, {2}]'.format(int((1 - 0.05)*100), round(LB, 3), round(UB, 3))
 
-  if (LB < 0) and (UB < 0):
+    if (LB < 0) and (UB < 0):
       print( "First system's configuration is better than the second one in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE , '\n' , CI)
-  elif (LB > 0) and (UB > 0):
+    elif (LB > 0) and (UB > 0):
       print( "Second system's configuration is better than the first one in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE , '\n' , CI)
-  else:
+    else:
       print( "There is no significant difference between first and secend system's configuration in measurement of {0}[{1}]".format(kpi_category, kpi) , '\n' , PE , '\n' , CI)
 
   # -------------------------------------------------------------------------------------------------------------------------------
