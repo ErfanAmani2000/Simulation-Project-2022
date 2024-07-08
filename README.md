@@ -1,28 +1,38 @@
 # Call Center Simulation Project
-The purpose of this code is to simulate a casual call center with 
-two experts, three amateur, and two technical servers. we prepared
-this for the "Introduction to Simulation" course project; which was 
-instructed by Dr. Nafise Sedghi. For this code to be completed we 
-also appreciate Mr. Shahmoradi for his constructive and helpful 
-advice.
 
-In this simulation, all service times are based on exponential 
-distribution, and all inter-arrival times are Poisson distribution 
-with different mean parameters. in the presented call center, we
-have three subsystems. The first one is when a user call and with attention
-to the fact that the user type (whether he/she is a normal or special
-user) and queue are different, one of an expert of amateur servers will serve him/her.
-The second subsystem is the call-back mechanism. In a specific condition, the user can 
-leave the queue and require a call-back option; this option will make servers call him 
-on the 2nd or 3rd shift of the day, whenever they are idle. The third subsystem
-is technical call. when a user ends their call with one of the servers (
-expert or amateur) he/she can demand to be connected to technical servers
-to solve his/her technical issues.
+## Overview
 
-On a random day of each month, disruption occurs. As a result users inter
-arrival times change that should be modeled.
+This project simulates a call center environment with three types of servers: experts, amateurs, and technical support. It was developed for the "Introduction to Simulation" course under the guidance of Dr. Nafise Sedghi. We also thank Mr. Shahmoradi for his constructive and helpful advice.
 
-We use Object-Oriented Programming and develop a class for this simulation.
-the only reason is to initialize the class with some essential parameters 
-and in the third phase when we need to make a statistical comparison between 
-two configurations of the system, a class would make that easy.
+## Simulation Details
+
+In this simulation:
+
+- **Service times** are modeled using an exponential distribution.
+- **Inter-arrival times** follow a Poisson distribution with varying mean parameters.
+  
+The call center is divided into three subsystems:
+
+1. **User Calls**: Depending on the user type (normal or special) and queue status, calls are directed to expert or amateur servers.
+2. **Call-Back Mechanism**: Users can opt for a call-back if they leave the queue under certain conditions. Servers will call back the user during the 2nd or 3rd shift whenever they are idle.
+3. **Technical Calls**: After finishing a call with an expert or amateur server, users can be connected to technical servers for additional support.
+
+Additionally, a disruption affects user inter-arrival times on a random day each month, which is incorporated into the model.
+
+## Project Structure
+
+The simulation is implemented using Object-Oriented Programming (OOP). The use of classes allows for easy initialization with essential parameters and facilitates statistical comparisons between different system configurations.
+
+## Installation
+
+1. **Clone the repository**:
+    ```bash
+    git clone https://github.com/YourUsername/CallCenterSimulation.git
+    cd CallCenterSimulation
+    ```
+
+2. **Create a virtual environment (optional but recommended)**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
