@@ -1,4 +1,4 @@
-# Call Center Simulation Project
+# Call Center Discrete Event Simulation
 
 ## Overview
 
